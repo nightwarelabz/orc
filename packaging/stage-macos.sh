@@ -63,6 +63,17 @@ mkdir -p "$APP/Contents/Resources/engine/orc.app/Contents/Resources/distribution
 cp "$ROOT/distribution/policies.json" \
    "$APP/Contents/Resources/engine/orc.app/Contents/Resources/distribution/policies.json"
 
+# orc's autoconfig: append orc's block to the engine's librewolf.cfg
+# (WebGL prompt off -- see packaging/orc-autoconfig.cfg) and audit
+# that it landed; enterprise policy cannot set a librewolf.* pref.
+# This happens before the seal below, so the seal covers these bytes.
+CFG="$APP/Contents/Resources/engine/orc.app/Contents/Resources/librewolf.cfg"
+[ -f "$CFG" ] || { echo "stage-macos: librewolf.cfg not found in engine" >&2; exit 1; }
+if ! grep -q 'librewolf.webgl.prompt' "$CFG"; then
+  cat "$ROOT/packaging/orc-autoconfig.cfg" >> "$CFG"
+fi
+grep -q 'pref("librewolf.webgl.prompt", false)' "$CFG" || { echo "stage-macos: orc autoconfig append missing from librewolf.cfg" >&2; exit 1; }
+
 cp "$LAUNCHER" "$APP/Contents/MacOS/orc"
 chmod +x "$APP/Contents/MacOS/orc"
 cp "$ROOT/profile/user.js" "$APP/Contents/Resources/profile-seed/user.js"

@@ -39,6 +39,18 @@ user_pref("privacy.resistFingerprinting", false); // Deliberate (Chase's full-fu
                                                   // Protection stay strict; flip RFP on in
                                                   // Settings if you want LibreWolf's posture.
 user_pref("webgl.disabled", false);
+user_pref("librewolf.webgl.prompt", false); // LibreWolf 158 also gates WebGL
+                                             // behind a per-site permission prompt
+                                             // (small address-bar icon, temporary
+                                             // grant): contexts are blocked until
+                                             // granted, so pages report WebGL
+                                             // "not available" even with the line
+                                             // above false. Full functionality
+                                             // means no gate. The stagers force the
+                                             // same pref in the engine autoconfig
+                                             // (packaging/orc-autoconfig.cfg) so
+                                             // existing profiles heal too; this
+                                             // seed covers fresh profiles.
 
 // --- https / safe browsing posture ---
 user_pref("security.https_only_mode", true);

@@ -49,6 +49,15 @@ mv "$PKG/engine/librewolf-bin" "$PKG/engine/orc-bin"
 python3 "$ROOT/packaging/brand-patch.py" patch "$PKG/engine" "$ROOT/branding"
 mkdir -p "$PKG/engine/distribution"
 cp "$ROOT/distribution/policies.json" "$PKG/engine/distribution/policies.json"
+# orc's autoconfig: append orc's block to the engine's librewolf.cfg
+# (WebGL prompt off -- see packaging/orc-autoconfig.cfg) and audit
+# that it landed; enterprise policy cannot set a librewolf.* pref.
+CFG="$PKG/engine/librewolf.cfg"
+[ -f "$CFG" ] || { echo "stage-linux: librewolf.cfg not found in engine" >&2; exit 1; }
+if ! grep -q 'librewolf.webgl.prompt' "$CFG"; then
+  cat "$ROOT/packaging/orc-autoconfig.cfg" >> "$CFG"
+fi
+grep -q 'pref("librewolf.webgl.prompt", false)' "$CFG" || { echo "stage-linux: orc autoconfig append missing from librewolf.cfg" >&2; exit 1; }
 cp "$ROOT/profile/user.js" "$PKG/profile-seed/user.js"
 for s in 512 256 128 64 32 16; do
   cp "$ROOT/branding/orc-$s.png" "$PKG/icons/orc-$s.png"

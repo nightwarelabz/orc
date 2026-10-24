@@ -84,6 +84,15 @@ if ($rceditHash -ne '3e7801db1a5edbec91b49a24a094aad776cb4515488ea5a4ca2289c400e
 if ($LASTEXITCODE -ne 0) { throw 'rcedit failed' }
 # orc's policy layer lives inside the engine root as distribution/.
 Copy-Item -Recurse (Join-Path $Root 'distribution') (Join-Path $stage 'engine\distribution')
+# orc's autoconfig: append orc's block to the engine's librewolf.cfg
+# (WebGL prompt off -- see packaging/orc-autoconfig.cfg) and audit
+# that it landed; enterprise policy cannot set a librewolf.* pref.
+$cfgPath = Join-Path $stage 'engine\librewolf.cfg'
+if (-not (Test-Path $cfgPath)) { throw 'stage-windows: librewolf.cfg not found in engine' }
+if (-not (Select-String -Path $cfgPath -SimpleMatch 'librewolf.webgl.prompt' -Quiet)) {
+    Add-Content -Path $cfgPath -Value (Get-Content (Join-Path $Root 'packaging\orc-autoconfig.cfg') -Raw) -Encoding Ascii
+}
+if (-not (Select-String -Path $cfgPath -SimpleMatch 'pref("librewolf.webgl.prompt", false)' -Quiet)) { throw 'stage-windows: orc autoconfig append missing from librewolf.cfg' }
 # First-run profile seed.
 New-Item -ItemType Directory -Force (Join-Path $stage 'profile-seed') | Out-Null
 Copy-Item (Join-Path $Root 'profile\user.js') (Join-Path $stage 'profile-seed\user.js')
