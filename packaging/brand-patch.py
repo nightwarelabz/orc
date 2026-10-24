@@ -251,6 +251,24 @@ def patch_text(name: str, text: str) -> str:
     return text
 
 
+# Branding constants that live in code files. The profile location is
+# pinned by the launcher (-profile), so renaming the basename cannot
+# orphan a profile; what it changes is every surface that reads the
+# app identity from AppConstants (backup folder, legacy display name).
+CONST_FILES = ("modules/AppConstants.sys.mjs", "BackupService.sys.mjs")
+
+
+def patch_consts(name: str, text: str) -> str:
+    if name.endswith("AppConstants.sys.mjs"):
+        text = text.replace('MOZ_APP_BASENAME: "LibreWolf"',
+                            'MOZ_APP_BASENAME: "orc"')
+        text = text.replace('MOZ_APP_DISPLAYNAME_DO_NOT_USE: "LibreWolf"',
+                            'MOZ_APP_DISPLAYNAME_DO_NOT_USE: "orc"')
+    if name.endswith("BackupService.sys.mjs"):
+        text = text.replace('"Restore LibreWolf"', '"Restore orc"')
+    return text
+
+
 def patch_jar(jar_path: str, assets: dict) -> int:
     changed = 0
     tmp = jar_path + ".brandtmp"
@@ -261,6 +279,13 @@ def patch_jar(jar_path: str, assets: dict) -> int:
             new = data
             if info.filename in assets:
                 new = assets[info.filename]
+            elif info.filename.endswith(CONST_FILES):
+                try:
+                    new = patch_consts(
+                        info.filename,
+                        data.decode("utf-8")).encode("utf-8")
+                except UnicodeDecodeError:
+                    new = data
             elif swept(info.filename):
                 try:
                     text = data.decode("utf-8")
@@ -293,6 +318,27 @@ def do_patch(engine_dir: str, branding_dir: str) -> int:
         n = patch_jar(jar, assets)
         print(f"brand-patch: {jar}: {n} entries rebranded")
         total += n
+    # Loose display text outside the jars (updater.ini, the cfg).
+    for root, _dirs, files in os.walk(engine_dir):
+        if any(p in root.lower() for p in EXCLUDE_PARTS):
+            continue
+        for fn in files:
+            if not fn.lower().endswith((".ini", ".cfg")):
+                continue
+            if fn in ("precomplete", "removed-files"):
+                continue
+            path = os.path.join(root, fn)
+            try:
+                with open(path, "r", encoding="utf-8") as fh:
+                    body = fh.read()
+            except (UnicodeDecodeError, OSError):
+                continue
+            body2 = patch_text(fn, body)
+            if body2 != body:
+                with open(path, "w", encoding="utf-8") as fh:
+                    fh.write(body2)
+                print(f"brand-patch: loose file rebranded: {path}")
+                total += 1
     ini = os.path.join(engine_dir, "application.ini")
     if os.path.isfile(ini):
         with open(ini, "r", encoding="utf-8") as fh:
@@ -310,70 +356,162 @@ def do_patch(engine_dir: str, branding_dir: str) -> int:
     return do_audit(engine_dir)
 
 
+# Strings that are identity plumbing, not display copy. They stay:
+# bundle identifiers and designated requirements (changing them breaks
+# the identity they name), license/legal files, install bookkeeping
+# lists, and compiled-in directory defaults read only on a bare
+# engine run (the launcher always pins -profile and the brand name
+# shown by the OS comes from the plists + AppConstants, both swept).
+DISPLAY_PATTERNS = ("LibreWolf Update", "LibreWolf 158", "uses Apple Events",
+                    "will be able to", "needs access", "needs this access",
+                    "reinstall LibreWolf", "Running LibreWolf",
+                    "Restore LibreWolf", "MOZ_APP_BASENAME",
+                    "MOZ_APP_DISPLAYNAME", "LibreWolf GPU Helper",
+                    "LibreWolf Media Plugin Helper",
+                    "GetInfoString")
+
+
+def _classify_hit(path: str, ctx: str) -> bool:
+    """True = a display surface still shows the old name."""
+    low = path.lower()
+    if any(p in low for p in EXCLUDE_PARTS):
+        return False
+    if os.path.basename(path) in ("precomplete", "removed-files"):
+        return False
+    if "_codesignature" in low:
+        return False
+    if "net.librewolf" in ctx:
+        rest = ctx.replace("net.librewolf", "")
+        if "LibreWolf" not in rest and "anchor apple" not in ctx:
+            return False
+    if "anchor apple" in ctx or "certificate" in ctx:
+        return False
+    if path.endswith((".plist", ".ini", ".cfg", ".txt")):
+        return True
+    if ".ja:" in path:  # an omni entry: display if it is a swept kind
+        entry = path.rsplit(":", 1)[-1].lower()
+        if entry.endswith(SWEEP_EXTS) or entry.endswith(CONST_FILES):
+            return True
+    if any(pat in ctx for pat in DISPLAY_PATTERNS):
+        return True
+    return False
+
+
 def do_audit(engine_dir: str) -> int:
     leftovers = []
+    internal = 0
+    # omni archives + loose files: one byte census over everything.
+    targets = []
     for jar in find_jars(engine_dir):
         with zipfile.ZipFile(jar, "r") as z:
             for info in z.infolist():
-                if info.filename in IMAGE_PATHS or not swept(info.filename):
-                    continue
-                try:
-                    text = z.read(info.filename).decode("utf-8")
-                except UnicodeDecodeError:
-                    continue
-                if "LibreWolf" in text:
-                    leftovers.append(f"{jar}:{info.filename}")
-    ini = os.path.join(engine_dir, "application.ini")
-    if os.path.isfile(ini) and "Name=LibreWolf" in open(ini).read():
-        leftovers.append(f"{ini}:Name")
+                targets.append((f"{jar}:{info.filename}",
+                                z.read(info.filename)))
+    for root, _dirs, files in os.walk(engine_dir):
+        for fn in files:
+            path = os.path.join(root, fn)
+            if path in find_jars(engine_dir):
+                continue
+            try:
+                with open(path, "rb") as fh:
+                    targets.append((path, fh.read()))
+            except OSError:
+                continue
+    for path, data in targets:
+        if b"LibreWolf" not in data:
+            continue
+        text = data.decode("utf-8", "replace")
+        for ln in text.splitlines():
+            if "LibreWolf" in ln:
+                if _classify_hit(path, ln.strip()):
+                    leftovers.append(f"{path}: {ln.strip()[:90]}")
+                else:
+                    internal += 1
     if leftovers:
-        print("brand-audit: LibreWolf still displayed in:", file=sys.stderr)
-        for x in leftovers[:20]:
+        print("brand-audit: LibreWolf still DISPLAYED in:", file=sys.stderr)
+        for x in leftovers[:25]:
             print("  " + x, file=sys.stderr)
         return 1
-    print("brand-audit: clean — no display file names LibreWolf")
+    print(f"brand-audit: clean — no display surface names LibreWolf "
+          f"({internal} internal identifier mentions left, by design)")
     return 0
 
 
+def _sweep_plist_values(obj, key=None):
+    """Replace the brand in every display string of a plist value.
+    Identity plumbing is left alone: bundle identifiers and code
+    requirement strings must keep pointing at the same identity."""
+    if isinstance(obj, str):
+        if key == "CFBundleIdentifier" or "net.librewolf" in obj:
+            return obj
+        if "anchor apple" in obj or "certificate" in obj:
+            return obj
+        return obj.replace("LibreWolf", "orc")
+    if isinstance(obj, dict):
+        return {k: _sweep_plist_values(v, k) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sweep_plist_values(v, key) for v in obj]
+    return obj
+
+
 def do_macos(app: str) -> int:
-    """Rename the engine bundle's display names + main executable."""
-    touched = 0
+    """Full macOS pass over the engine bundle: every plist display
+    string (usage descriptions, GetInfoString, helper names), the
+    helper executables' names, and the two user-facing error strings
+    compiled into XUL. Runs before the seal, like everything else."""
+    bundles = [app]
     for root, dirs, _files in os.walk(app):
         for d in dirs:
-            if not d.endswith(".app"):
-                continue
-            plist = os.path.join(root, d, "Contents", "Info.plist")
-            if not os.path.isfile(plist):
-                continue
-            with open(plist, "rb") as fh:
-                pl = plistlib.load(fh)
-            dirty = False
-            for key in ("CFBundleName", "CFBundleDisplayName"):
-                val = pl.get(key)
-                if isinstance(val, str) and "LibreWolf" in val:
-                    pl[key] = val.replace("LibreWolf", "orc")
-                    dirty = True
-            if dirty:
-                with open(plist, "wb") as fh:
-                    plistlib.dump(pl, fh)
-                touched += 1
-    # The top bundle itself (os.walk visits children only).
+            if d.endswith(".app"):
+                bundles.append(os.path.join(root, d))
+    for bundle in bundles:
+        plist = os.path.join(bundle, "Contents", "Info.plist")
+        if not os.path.isfile(plist):
+            continue
+        with open(plist, "rb") as fh:
+            pl = plistlib.load(fh)
+        pl = _sweep_plist_values(pl)
+        if bundle == app and "CFBundleDisplayName" not in pl:
+            pl["CFBundleDisplayName"] = "orc"
+        # helper executables take the new name their plist now claims
+        exe = pl.get("CFBundleExecutable")
+        macos_dir = os.path.join(bundle, "Contents", "MacOS")
+        if isinstance(exe, str) and exe.startswith("orc ") and os.path.isdir(macos_dir):
+            for fn in os.listdir(macos_dir):
+                if fn.startswith("LibreWolf ") and fn[10:] == exe[4:]:
+                    os.replace(os.path.join(macos_dir, fn),
+                               os.path.join(macos_dir, exe))
+                    print(f"brand-patch: helper executable -> {exe}")
+        with open(plist, "wb") as fh:
+            plistlib.dump(pl, fh)
+    # main executable rename (Contents/MacOS/librewolf -> orc)
     plist = os.path.join(app, "Contents", "Info.plist")
     with open(plist, "rb") as fh:
         pl = plistlib.load(fh)
-    for key in ("CFBundleName", "CFBundleDisplayName"):
-        val = pl.get(key)
-        if isinstance(val, str) and "LibreWolf" in val:
-            pl[key] = val.replace("LibreWolf", "orc")
     exe_dir = os.path.join(app, "Contents", "MacOS")
     old_exe = os.path.join(exe_dir, "librewolf")
     if os.path.isfile(old_exe):
         os.replace(old_exe, os.path.join(exe_dir, "orc"))
         pl["CFBundleExecutable"] = "orc"
+        with open(plist, "wb") as fh:
+            plistlib.dump(pl, fh)
         print("brand-patch: macOS engine executable -> orc")
-    with open(plist, "wb") as fh:
-        plistlib.dump(pl, fh)
-    print(f"brand-patch: macOS plist names -> orc ({touched} helper bundles)")
+    # user-facing error strings compiled into XUL (the profile-dir
+    # table entry beside them is internal and stays).
+    xul = os.path.join(exe_dir, "XUL")
+    if os.path.isfile(xul):
+        with open(xul, "rb") as fh:
+            blob = fh.read()
+        for old, new in ((b"reinstall LibreWolf?",
+                          b"reinstall orc?" + b"\x00" * 6),
+                         (b"Running LibreWolf as root",
+                          b"Running orc" + b"\x00" * 6 + b" as root")):
+            if old in blob:
+                blob = blob.replace(old, new)
+                print(f"brand-patch: XUL error string rebranded: {old[:28]}")
+        with open(xul, "wb") as fh:
+            fh.write(blob)
+    print(f"brand-patch: macOS pass complete ({len(bundles)} bundles)")
     return 0
 
 
