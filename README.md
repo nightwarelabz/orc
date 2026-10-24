@@ -37,11 +37,43 @@ fact about v1, stated plainly, not a defect in the package:
 
 - **Windows:** SmartScreen may say "Windows protected your PC" →
   *More info* → *Run anyway*.
-- **macOS:** Gatekeeper may say orc can't be opened → right-click
-  (Control-click) `orc.app` → *Open* → *Open*. (Or: System Settings →
-  Privacy & Security → *Open Anyway*.)
+- **macOS:** see the section below — Gatekeeper needs a word.
 - **Linux:** no warnings; `install.sh` is a short shell script — read
   it before you run it, it's meant to be read.
+
+#### macOS: the "could not verify" dialog is expected
+
+orc is not yet signed with an Apple Developer ID and is not
+notarized. That is the whole story behind the warning: on first open,
+macOS says **Apple could not verify "orc" is free of malware** and
+offers only *Done* / *Move to Trash*. Every unsigned app downloaded
+from the internet gets this dialog — it is Gatekeeper's default
+answer when it has no developer identity to check, not a finding
+about orc itself.
+
+To open it the first time:
+
+1. Try to open `orc.app` once, so macOS registers the block, and
+   dismiss the dialog.
+2. Open **System Settings → Privacy & Security** and scroll to the
+   Security section: *"orc" was blocked to protect your Mac*.
+3. Click **Open Anyway**, confirm, and authenticate if asked.
+
+That approval is remembered — orc launches normally from then on.
+The terminal equivalent, if you prefer it:
+`xattr -dr com.apple.quarantine /Applications/orc.app`
+
+One distinction worth knowing: **"damaged" is a different verdict,
+and you should never see it.** The bundle ships ad-hoc sealed, so its
+contents are verifiably intact. If macOS ever calls orc "damaged",
+the download was corrupted or altered in transit — delete it,
+re-download from the Releases page, and check the file against
+`SHA256SUMS.txt` before opening it.
+
+Until orc is enrolled and notarized, this first-open step is simply
+the price of an unsigned build. The packages themselves are built in
+the open, in CI, from this repository — the same pipeline whose
+checksums you can verify yourself.
 
 Inside, the engine is the **unmodified** LibreWolf build, verified
 against two checksums (ours, pinned in
@@ -55,8 +87,8 @@ sidecar) every time a package is built.
   portable build anywhere and run `orc.exe`. Your profile lives in
   `%APPDATA%\Nightware Labz\orc\profile`. Uninstalling removes the
   program; your profile stays unless you delete it yourself.
-- **macOS:** unzip, move `orc.app` to Applications, right-click → Open
-  the first time. Your profile lives in
+- **macOS:** unzip, move `orc.app` to Applications, then do the
+  one-time Gatekeeper approval described above. Your profile lives in
   `~/Library/Application Support/orc/profile`.
 - **Linux:** extract the tarball, `cd orc && ./install.sh`. It copies
   orc to `~/.local/share/orc`, links `~/.local/bin/orc`, and registers
