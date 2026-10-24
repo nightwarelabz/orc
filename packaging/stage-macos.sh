@@ -28,7 +28,7 @@ ICNS="${ORC_ICNS:-$OUTDIR/orc.icns}"
 [ -f "$ICNS" ] || { echo "stage-macos: orc.icns not found at $ICNS (build it: iconutil -c icns branding/orc.iconset -o $ICNS)" >&2; exit 1; }
 
 MNT="$(mktemp -d /tmp/orc-mnt.XXXXXX)"
-WORK="$(mktemp -d /tmp/orc-stage.XXXXXX)"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/orc-stage.XXXXXX")"
 cleanup() {
   hdiutil detach "$MNT" >/dev/null 2>&1 || true
   rm -rf "$MNT" "$WORK"

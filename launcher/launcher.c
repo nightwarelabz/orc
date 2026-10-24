@@ -17,6 +17,23 @@
  *   -DSEED_REL='"profile-seed/user.js"'
  */
 
+/* The build uses -std=c11 (strict ISO), which hides POSIX declarations
+ * (PATH_MAX, readlink, mkdir, ...) unless the feature macros are set
+ * before the first include. */
+#ifndef _WIN32
+# ifndef _POSIX_C_SOURCE
+#  define _POSIX_C_SOURCE 200809L
+# endif
+# ifndef _DEFAULT_SOURCE
+#  define _DEFAULT_SOURCE 1
+# endif
+# ifdef __APPLE__
+#  ifndef _DARWIN_C_SOURCE
+#   define _DARWIN_C_SOURCE 1
+#  endif
+# endif
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

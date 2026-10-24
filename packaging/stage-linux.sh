@@ -24,7 +24,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 [ -f "$TARBALL" ] || { echo "stage-linux: tarball not found: $TARBALL" >&2; exit 1; }
 [ -x "$LAUNCHER" ] || { echo "stage-linux: launcher not executable: $LAUNCHER" >&2; exit 1; }
 
-WORK="$(mktemp -d /tmp/orc-stage.XXXXXX)"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/orc-stage.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 tar -xJf "$TARBALL" -C "$WORK"
 BIN="$(find "$WORK" -name 'librewolf' -type f | head -n 1)"
