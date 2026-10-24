@@ -104,6 +104,19 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'makensis failed' }
           $hash = (Get-FileHash -Algorithm SHA256 $out).Hash.ToLowerInvariant()
           "$hash  $(Split-Path -Leaf $out)" | Set-Content "$out.sha256sum" -Encoding ascii
+      - name: Smoke test the package (x86_64 only - arm64 is cross-built)
+        if: matrix.arch == 'x86_64'
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          $zip = Get-ChildItem dist\orc-*-windows-x86_64.zip | Select-Object -First 1
+          Expand-Archive $zip.FullName -DestinationPath smoke -Force
+          $exe = Join-Path $PWD "smoke\orc\orc.exe"
+          if (-not (Test-Path $exe)) { throw "orc.exe missing from the package" }
+          & $exe --headless --screenshot (Join-Path $PWD "smoke.png") --window-size=1280,800 https://nosuchmachine.net/
+          if (-not (Test-Path smoke.png)) { throw "no screenshot produced" }
+          if ((Get-Item smoke.png).Length -lt 20000) { throw "screenshot suspiciously small" }
+          Write-Host "smoke ok: $((Get-Item smoke.png).Length) bytes"
       - uses: actions/upload-artifact@v4
         with:
           name: orc-windows-${{ matrix.arch }}
@@ -154,6 +167,16 @@ jobs:
           set -euo pipefail
           ORC_ICNS=dist/orc.icns ./packaging/stage-macos.sh \
             engine.dmg ${{ matrix.arch }} ${{ needs.meta.outputs.version }} build/orc dist
+      - name: Smoke test the package
+        shell: bash
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          APP="dist/stage-macos-${{ matrix.arch }}/orc.app"
+          codesign --verify --deep --strict "$APP"
+          timeout 240 "$APP/Contents/MacOS/orc" --headless --screenshot "$PWD/smoke.png" --window-size=1280,800 https://nosuchmachine.net/
+          [ -f smoke.png ] && [ "$(stat -f%z smoke.png)" -gt 20000 ] || { echo "smoke screenshot missing or tiny"; exit 1; }
+          echo "smoke ok"
       - uses: actions/upload-artifact@v4
         with:
           name: orc-macos-${{ matrix.arch }}
@@ -188,6 +211,15 @@ jobs:
           set -euo pipefail
           ./packaging/build-launcher.sh linux build/orc
           ./packaging/stage-linux.sh engine.tar.xz "${{ needs.meta.outputs.version }}" build/orc dist
+      - name: Smoke test the package
+        shell: bash
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          mkdir -p smoke && tar -xzf dist/orc-*-linux-x86_64.tar.gz -C smoke
+          timeout 240 ./smoke/orc/orc --headless --screenshot "$PWD/smoke.png" --window-size=1280,800 https://nosuchmachine.net/
+          [ -f smoke.png ] && [ "$(stat -c%s smoke.png)" -gt 20000 ] || { echo "smoke screenshot missing or tiny"; exit 1; }
+          echo "smoke ok"
       - uses: actions/upload-artifact@v4
         with:
           name: orc-linux-x86_64
