@@ -65,6 +65,7 @@ jobs:
     needs: meta
     runs-on: windows-latest
     strategy:
+      fail-fast: false
       matrix:
         arch: [x86_64, arm64]
     steps:
@@ -110,6 +111,7 @@ jobs:
     needs: meta
     runs-on: macos-latest
     strategy:
+      fail-fast: false
       matrix:
         include:
           - arch: arm64
@@ -118,6 +120,7 @@ jobs:
             file_key: macos_x86_64
     steps:
       - uses: actions/checkout@v4
+      - run: chmod +x packaging/*.sh
       - name: Download + verify engine
         shell: bash
         run: |
@@ -158,6 +161,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - run: chmod +x packaging/*.sh
       - name: Download + verify engine
         shell: bash
         run: |
