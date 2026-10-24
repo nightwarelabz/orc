@@ -230,7 +230,14 @@ jobs:
           Install orc, open it: nosuchmachine.net, Blacksite included,
           on the same engine everywhere.
           EOF
-          gh release create "${GITHUB_REF_NAME}" \
-            --title "orc $VERSION" \
-            --notes-file notes.md \
-            -- *.zip *.tar.gz *-setup.exe SHA256SUMS.txt
+          # The tag may arrive with a release already attached (the
+          # web UI creates both together); either way the assets land.
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" --clobber *.zip *.tar.gz *-setup.exe SHA256SUMS.txt
+            gh release edit "${GITHUB_REF_NAME}" --title "orc $VERSION" --notes-file notes.md
+          else
+            gh release create "${GITHUB_REF_NAME}" \
+              --title "orc $VERSION" \
+              --notes-file notes.md \
+              *.zip *.tar.gz *-setup.exe SHA256SUMS.txt
+          fi
