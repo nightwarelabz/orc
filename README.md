@@ -1,6 +1,6 @@
 # orc
 
-**ORC stands for Orchestration.** orc is Nightware Labz' own browser —
+orc is Nightware Labz' own browser —
 our version of LibreWolf, wrapped as a system you install once and run
 anywhere. Its mark is the pixel orc face in `branding/` — orc's browser
 icon and main icon everywhere.
