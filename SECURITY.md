@@ -45,6 +45,15 @@ files, the files are wrong and this document is the bug report.
 - Media is fully enabled, including Widevine/EME: the proprietary
   Google CDM downloads on first use, as in Firefox. A browser that
   silently cannot play the web's media is not fully functional.
+- WebGL is on, without LibreWolf's per-site permission prompt: the
+  engine orc ships (LibreWolf 158) blocks every WebGL context until
+  the site is granted permission from a small address-bar icon, and
+  the grant is temporary — pages then report "WebGL is not
+  available" in a browser that has it enabled. orc turns the prompt
+  off in the engine's autoconfig (`librewolf.webgl.prompt=false`),
+  so WebGL simply works, as in Firefox. The fingerprinting exposure
+  WebGL carries is the same trade as the RFP choice above: stated,
+  not hidden.
 - The launcher is a small native program: fixed relative engine
   path, no shell, arguments forwarded verbatim, and a profile that
   lives in orc's own folder — separate from any Firefox/LibreWolf
