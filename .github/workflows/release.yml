@@ -181,6 +181,17 @@ jobs:
           "$APP/Contents/MacOS/orc" --headless --screenshot "$PWD/smoke.png" --window-size=1280,800 https://nosuchmachine.net/
           [ -f smoke.png ] && [ "$(stat -f%z smoke.png)" -gt 20000 ] || { echo "smoke screenshot missing or tiny"; exit 1; }
           echo "smoke ok"
+      - name: Diagnose the macOS engine (only when the smoke failed)
+        if: failure()
+        shell: bash
+        run: |
+          APP="dist/stage-macos-${{ matrix.arch }}/orc.app"
+          ENG="$APP/Contents/Resources/engine/LibreWolf.app"
+          ls -la "$ENG/Contents/MacOS/" || true
+          file "$ENG/Contents/MacOS/librewolf" || true
+          codesign --verify --deep --strict --verbose=4 "$ENG" || true
+          "$ENG/Contents/MacOS/librewolf" -profile "$PWD/diag-profile" --headless --screenshot "$PWD/direct.png" --window-size=800,600 about:blank || true
+          ls -la direct.png 2>/dev/null || echo "direct engine run produced no screenshot"
       - uses: actions/upload-artifact@v4
         with:
           name: orc-macos-${{ matrix.arch }}
