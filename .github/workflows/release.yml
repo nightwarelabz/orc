@@ -197,8 +197,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    needs: [meta, windows, macos, linux]
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [meta, windows, macos, linux]    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -222,7 +221,7 @@ jobs:
           cat -- *.sha256sum > SHA256SUMS.txt
           VERSION="${{ needs.meta.outputs.version }}"
           cat > notes.md <<EOF
-          orc $VERSION - ORC (Orchestration), the Nightware Labz browser.
+          orc $VERSION - the Nightware Labz browser.
 
           Wraparound build: a small native launcher + the unmodified
           LibreWolf ${{ needs.meta.outputs.engine_version }} engine
