@@ -210,6 +210,11 @@ jobs:
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
+          # This job never checks out the repo (artifacts only), so gh
+          # has no git remote to infer from and dies with "failed to
+          # run git: not a git repository" (release run #4). Name the
+          # repo outright.
+          GH_REPO: ${{ github.repository }}
         shell: bash
         run: |
           set -euo pipefail
