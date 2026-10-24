@@ -311,6 +311,40 @@ def find_jars(engine_dir: str):
             if os.path.isfile(p)]
 
 
+# User-facing error strings compiled into the engine library. The
+# replacements are byte-for-byte the same length (NUL-padded), so
+# no offset, size or checksum-by-length anywhere can shift.
+XUL_STRINGS = ((b"reinstall LibreWolf?",
+                b"reinstall orc?" + b"\x00" * 6),
+               (b"Running LibreWolf as root",
+                b"Running orc" + b"\x00" * 6 + b" as root"))
+
+
+def patch_binary_strings(path: str) -> int:
+    """Rebrand the compiled-in display strings of one engine binary.
+    Shared by every platform: the strings live in XUL on macOS and in
+    libxul.so / xul.dll elsewhere — v0.1.6 shipped with this step
+    wired into the macOS pass only, and the audit (correctly)
+    failed the Linux and Windows legs for it."""
+    try:
+        with open(path, "rb") as fh:
+            blob = fh.read()
+    except OSError:
+        return 0
+    n = 0
+    for old, new in XUL_STRINGS:
+        assert len(old) == len(new)
+        if old in blob:
+            blob = blob.replace(old, new)
+            n += 1
+            print(f"brand-patch: binary string rebranded in {path}: "
+                  f"{old[:28]!r}")
+    if n:
+        with open(path, "wb") as fh:
+            fh.write(blob)
+    return n
+
+
 def do_patch(engine_dir: str, branding_dir: str) -> int:
     assets = derive_assets(branding_dir)
     total = 0
@@ -339,6 +373,12 @@ def do_patch(engine_dir: str, branding_dir: str) -> int:
                     fh.write(body2)
                 print(f"brand-patch: loose file rebranded: {path}")
                 total += 1
+    # Compiled-in display strings in the engine library (Linux /
+    # Windows shape; the macOS pass handles its XUL the same way).
+    for lib in ("libxul.so", "xul.dll", "XUL"):
+        p = os.path.join(engine_dir, lib)
+        if os.path.isfile(p):
+            total += patch_binary_strings(p)
     ini = os.path.join(engine_dir, "application.ini")
     if os.path.isfile(ini):
         with open(ini, "r", encoding="utf-8") as fh:
@@ -500,17 +540,7 @@ def do_macos(app: str) -> int:
     # table entry beside them is internal and stays).
     xul = os.path.join(exe_dir, "XUL")
     if os.path.isfile(xul):
-        with open(xul, "rb") as fh:
-            blob = fh.read()
-        for old, new in ((b"reinstall LibreWolf?",
-                          b"reinstall orc?" + b"\x00" * 6),
-                         (b"Running LibreWolf as root",
-                          b"Running orc" + b"\x00" * 6 + b" as root")):
-            if old in blob:
-                blob = blob.replace(old, new)
-                print(f"brand-patch: XUL error string rebranded: {old[:28]}")
-        with open(xul, "wb") as fh:
-            fh.write(blob)
+        patch_binary_strings(xul)
     print(f"brand-patch: macOS pass complete ({len(bundles)} bundles)")
     return 0
 
