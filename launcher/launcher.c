@@ -288,6 +288,21 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    /* Normalize the engine path before exec. On macOS ENGINE_REL
+     * climbs out of the launcher's MacOS dir with "..", and the
+     * engine locates its own bundle by walking the path it was
+     * executed with — a ".." in that path leaves its XPCOM/GRE
+     * resolution staring at the wrong bundle ("Couldn't load
+     * XPCOM", exit 255, CI v0.1.3 — macOS was the only platform
+     * whose ENGINE_REL contains "..", and the only one failing).
+     * realpath hands it the clean absolute path. */
+    {
+        char clean[PATH_MAX];
+        if (realpath(engine, clean) != NULL) {
+            snprintf(engine, sizeof(engine), "%s", clean);
+        }
+    }
+
     /* Profile folder, per OS. */
     char profile[PATH_MAX];
     const char *home = getenv("HOME");
