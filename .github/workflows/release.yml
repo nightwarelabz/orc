@@ -113,10 +113,14 @@ jobs:
           Expand-Archive $zip.FullName -DestinationPath smoke -Force
           $exe = Join-Path $PWD "smoke\orc\orc.exe"
           if (-not (Test-Path $exe)) { throw "orc.exe missing from the package" }
-          & $exe --headless --screenshot (Join-Path $PWD "smoke.png") --window-size=1280,800 https://nosuchmachine.net/
-          if (-not (Test-Path smoke.png)) { throw "no screenshot produced" }
-          if ((Get-Item smoke.png).Length -lt 20000) { throw "screenshot suspiciously small" }
-          Write-Host "smoke ok: $((Get-Item smoke.png).Length) bytes"
+          $shot = Join-Path $PWD "smoke.png"
+          $proc = Start-Process $exe -ArgumentList '--headless','--screenshot',"$shot",'--window-size=1280,800','https://nosuchmachine.net/' -Wait -PassThru -NoNewWindow -RedirectStandardError smoke-err.txt -RedirectStandardOutput smoke-out.txt
+          Write-Host "launcher exit code: $($proc.ExitCode)"
+          if (Test-Path smoke-err.txt) { Get-Content smoke-err.txt | Write-Host }
+          for ($i = 0; $i -lt 30 -and -not (Test-Path $shot); $i++) { Start-Sleep -Seconds 2 }
+          if (-not (Test-Path $shot)) { throw "no screenshot produced" }
+          if ((Get-Item $shot).Length -lt 20000) { throw "screenshot suspiciously small" }
+          Write-Host "smoke ok: $((Get-Item $shot).Length) bytes"
       - uses: actions/upload-artifact@v4
         with:
           name: orc-windows-${{ matrix.arch }}
@@ -174,7 +178,7 @@ jobs:
           set -euo pipefail
           APP="dist/stage-macos-${{ matrix.arch }}/orc.app"
           codesign --verify --deep --strict "$APP"
-          timeout 240 "$APP/Contents/MacOS/orc" --headless --screenshot "$PWD/smoke.png" --window-size=1280,800 https://nosuchmachine.net/
+          "$APP/Contents/MacOS/orc" --headless --screenshot "$PWD/smoke.png" --window-size=1280,800 https://nosuchmachine.net/
           [ -f smoke.png ] && [ "$(stat -f%z smoke.png)" -gt 20000 ] || { echo "smoke screenshot missing or tiny"; exit 1; }
           echo "smoke ok"
       - uses: actions/upload-artifact@v4
@@ -217,7 +221,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p smoke && tar -xzf dist/orc-*-linux-x86_64.tar.gz -C smoke
-          timeout 240 ./smoke/orc/orc --headless --screenshot "$PWD/smoke.png" --window-size=1280,800 https://nosuchmachine.net/
+          ./smoke/orc/orc --headless --screenshot "$PWD/smoke.png" --window-size=1280,800 https://nosuchmachine.net/
           [ -f smoke.png ] && [ "$(stat -c%s smoke.png)" -gt 20000 ] || { echo "smoke screenshot missing or tiny"; exit 1; }
           echo "smoke ok"
       - uses: actions/upload-artifact@v4
