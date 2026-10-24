@@ -32,9 +32,9 @@ user_pref("privacy.partition.network_state", true);
 user_pref("privacy.query_stripping.enabled", true);
 user_pref("privacy.query_stripping.strip_list", "__hsfp __hssc __hstc hsCtaTracking");
 user_pref("network.cookie.cookieBehavior", 5); // dFPI / Total Cookie Protection
-user_pref("privacy.resistFingerprinting", false); // LibreWolf default is true; orc keeps it
-                                                   // off by default so Blacksite's canvas/
-                                                   // wasm timing stays smooth — flip in Settings.
+user_pref("privacy.resistFingerprinting", true); // LibreWolf's posture, kept (security pass,
+                                                  // 2026-10-24): fingerprinting resistance
+                                                  // outranks canvas smoothness.
 user_pref("webgl.disabled", false);
 
 // --- https / safe browsing posture ---
