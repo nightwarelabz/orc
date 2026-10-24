@@ -1,5 +1,15 @@
 {
   "policies": {
+    "Preferences": {
+      "webgl.disabled": {
+        "Value": false,
+        "Status": "user"
+      },
+      "media.eme.enabled": {
+        "Value": true,
+        "Status": "user"
+      }
+    },
     "DisableTelemetry": true,
     "DisableFirefoxStudies": true,
     "DisablePocket": true,
