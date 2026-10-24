@@ -32,9 +32,12 @@ user_pref("privacy.partition.network_state", true);
 user_pref("privacy.query_stripping.enabled", true);
 user_pref("privacy.query_stripping.strip_list", "__hsfp __hssc __hstc hsCtaTracking");
 user_pref("network.cookie.cookieBehavior", 5); // dFPI / Total Cookie Protection
-user_pref("privacy.resistFingerprinting", true); // LibreWolf's posture, kept (security pass,
-                                                  // 2026-10-24): fingerprinting resistance
-                                                  // outranks canvas smoothness.
+user_pref("privacy.resistFingerprinting", false); // Deliberate (Chase's full-functionality
+                                                  // ruling, 2026-10-24): RFP normalizes canvas,
+                                                  // timezone and timers in ways that break real
+                                                  // sites. Tracking protection + Total Cookie
+                                                  // Protection stay strict; flip RFP on in
+                                                  // Settings if you want LibreWolf's posture.
 user_pref("webgl.disabled", false);
 
 // --- https / safe browsing posture ---
@@ -56,6 +59,15 @@ user_pref("extensions.pocket.enabled", false);
 user_pref("browser.vpn_promo.enabled", false);
 user_pref("browser.promo.focus.enabled", false);
 user_pref("identity.fxaccounts.enabled", false); // no account wall; enable manually if wanted
+
+// --- media: everything plays ---
+// Widevine/EME ships OFF in LibreWolf by default, which silently
+// breaks Netflix/Spotify-class sites. Full functionality means on.
+// The CDM is a proprietary Google blob fetched on first use — that
+// trade is stated in SECURITY.md, not hidden.
+user_pref("media.eme.enabled", true);
+user_pref("media.gmp-widevinecdm.enabled", true);
+user_pref("media.gmp-widevinecdm.visible", true);
 
 // --- downloads / files stay local ---
 user_pref("browser.download.useDownloadDir", true);

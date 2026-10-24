@@ -61,6 +61,28 @@ cp "$ICNS" "$APP/Contents/Resources/orc.icns"
 sed "s/__VERSION__/$VERSION/g" "$ROOT/packaging/Info.plist.tmpl" > "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
+# Seal the bundle ad-hoc, inside-out, and prove the seal. Two facts
+# make this mandatory, learned from Chase's "orc is damaged" report
+# (v0.1.1): writing distribution/policies.json into the nested app
+# invalidates LibreWolf's own signature, and the outer orc.app was
+# never signed at all — a quarantined download in that state is
+# exactly what Gatekeeper calls "damaged". Ad-hoc signing does not
+# make the app identified (first open still needs right-click > Open,
+# as the README says), but it makes the bundle structurally valid,
+# which is the difference between "damaged" and "unidentified".
+# No --options runtime: the Gecko JIT would need entitlements we do
+# not hold; the hardened runtime stays off for ad-hoc builds.
+if command -v codesign >/dev/null 2>&1; then
+  codesign --force --deep --sign - --timestamp=none \
+    "$APP/Contents/Resources/engine/LibreWolf.app"
+  codesign --force --sign - --timestamp=none "$APP"
+  codesign --verify --deep --strict "$APP"
+  echo "sealed (ad-hoc) $APP"
+else
+  echo "stage-macos: codesign not found — refusing to ship an unsealed bundle" >&2
+  exit 1
+fi
+
 mkdir -p "$OUTDIR"
 OUTZIP="$OUTDIR/orc-$VERSION-macos-$ARCH.zip"
 rm -f "$OUTZIP"

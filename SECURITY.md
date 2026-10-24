@@ -14,20 +14,27 @@ files, the files are wrong and this document is the bug report.
   updates arrive as new orc releases, re-verified the same way.
 - Packages are built by the public workflow in this repo from the
   public sources in this repo. Release assets carry `SHA256SUMS.txt`.
-- v1 packages are **unsigned**: Windows SmartScreen and macOS
-  Gatekeeper will warn. That is stated, not hidden.
+- v1 packages carry **no paid identity**: the macOS bundle is
+  ad-hoc sealed and verified in CI (structurally valid — never the
+  "damaged" verdict), but not Developer-ID signed or notarized, so
+  first open is right-click > Open. Windows SmartScreen will warn
+  likewise. That is stated, not hidden.
 
 ## The browser
 
 - Telemetry, studies, Pocket, sponsored content: off by policy.
 - HTTPS-only mode on; tracking protection strict (incl. cryptomining,
   fingerprinting, email tracking); Total Cookie Protection on.
-- `privacy.resistFingerprinting` is **on** (kept from LibreWolf's
-  posture in the 2026-10-24 security pass, trading a little canvas
-  smoothness for it).
-- DNS-over-HTTPS is on with **no fallback**: if DoH is blocked, name
-  resolution fails closed rather than leaking queries to the system
-  resolver.
+- `privacy.resistFingerprinting` is **off by deliberate choice**
+  (Chase's full-functionality ruling): RFP normalizes canvas,
+  timezone and timers in ways that break real sites. Tracking
+  protection and Total Cookie Protection remain strict, and RFP is
+  one toggle away in Settings for anyone who wants LibreWolf's
+  harder posture.
+- DNS-over-HTTPS is on, with fallback to the system resolver when
+  DoH is unreachable (a fail-closed posture broke real networks —
+  captive portals and filtered resolvers — and full functionality
+  won the trade; stated here, not hidden).
 - Search is DuckDuckGo by default with suggestions off; Google, Bing,
   Amazon and eBay search plugins are removed.
 - uBlock Origin is force-installed from Mozilla Add-ons (Mozilla-
@@ -35,6 +42,9 @@ files, the files are wrong and this document is the bug report.
   deliberately not a bundled, stale-able copy).
 - Form history off; cache and form data sanitized on shutdown;
   history and cookies are the user's and are kept.
+- Media is fully enabled, including Widevine/EME: the proprietary
+  Google CDM downloads on first use, as in Firefox. A browser that
+  silently cannot play the web's media is not fully functional.
 - The launcher is a small native program: fixed relative engine
   path, no shell, arguments forwarded verbatim, and a profile that
   lives in orc's own folder — separate from any Firefox/LibreWolf

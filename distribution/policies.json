@@ -78,7 +78,7 @@
     "DNSOverHTTPS": {
       "Enabled": true,
       "Locked": false,
-      "Fallback": false
+      "Fallback": true
     },
     "PasswordManagerEnabled": true,
     "OfferToSaveLoginsDefault": true,
