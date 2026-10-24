@@ -9,6 +9,7 @@ OUT="${2:?usage: build-launcher.sh <linux|macos> <output-path> [arch]}"
 ARCH="${3:-}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CC="${CC:-cc}"
+mkdir -p "$(dirname "$OUT")"
 
 case "$OS" in
   linux)
