@@ -24,7 +24,20 @@ if ($Icon) {
     $rc = Join-Path $env:TEMP 'orc-launcher.rc'
     $res = Join-Path $env:TEMP 'orc-launcher.res'
     Set-Content -Path $rc -Value "1 ICON `"$($Icon -replace '\\','\\')`"" -Encoding ascii
-    & rc.exe /nologo /fo $res $rc
+    # rc.exe must be the HOST architecture's: under an arm64 cross shell
+    # the PATH rc.exe is the arm64 SDK build, which cannot start on an
+    # x64 runner ("not a valid application for this OS platform", CI
+    # run #1). The resource it emits is arch-neutral, so the newest
+    # x64 rc.exe is always the right tool.
+    $rcExe = $null
+    $kits = 'C:\Program Files (x86)\Windows Kits\10\bin'
+    if (Test-Path $kits) {
+        $rcExe = Get-ChildItem $kits -Directory | Sort-Object Name -Descending |
+            ForEach-Object { Join-Path $_.FullName 'x64\rc.exe' } |
+            Where-Object { Test-Path $_ } | Select-Object -First 1
+    }
+    if (-not $rcExe) { $rcExe = (Get-Command rc.exe -ErrorAction Stop).Source }
+    & $rcExe /nologo /fo $res $rc
     if ($LASTEXITCODE -ne 0) { throw 'rc.exe failed' }
     $extra += $res
 }
