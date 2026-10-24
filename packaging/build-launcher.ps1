@@ -12,7 +12,7 @@ $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
 
 $defs = @(
-    '/DENGINE_REL="engine\\librewolf.exe"',
+    '/DENGINE_REL="engine\\orc.exe"',
     '/DSEED_REL="profile-seed\\user.js"'
 )
 $outDir = Split-Path -Parent $Out

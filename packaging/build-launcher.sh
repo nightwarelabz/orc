@@ -13,14 +13,14 @@ mkdir -p "$(dirname "$OUT")"
 
 case "$OS" in
   linux)
-    ENGINE_REL='engine/librewolf'
+    ENGINE_REL='engine/orc'
     SEED_REL='profile-seed/user.js'
     "$CC" -O2 -Wall -Wextra -std=c11 \
       -DENGINE_REL="\"$ENGINE_REL\"" -DSEED_REL="\"$SEED_REL\"" \
       -o "$OUT" "$ROOT/launcher/launcher.c"
     ;;
   macos)
-    ENGINE_REL='../Resources/engine/LibreWolf.app/Contents/MacOS/librewolf'
+    ENGINE_REL='../Resources/engine/orc.app/Contents/MacOS/orc'
     SEED_REL='../Resources/profile-seed/user.js'
     ARCHFLAG=""
     if [ -n "$ARCH" ]; then ARCHFLAG="-arch $ARCH"; fi

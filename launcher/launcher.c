@@ -13,7 +13,7 @@
  * (MPL-2.0). orc never touches another browser's profile.
  *
  * Compile (done by packaging/build-launcher.{sh,ps1} and CI):
- *   -DENGINE_REL='"engine/librewolf"'            (platform separators)
+ *   -DENGINE_REL='"engine/orc"'            (platform separators)
  *   -DSEED_REL='"profile-seed/user.js"'
  */
 

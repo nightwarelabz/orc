@@ -13,7 +13,7 @@ DEST="$HOME/.local/share/orc"
 mkdir -p "$DEST" "$HOME/.local/bin" "$HOME/.local/share/applications" \
          "$HOME/.local/share/icons/hicolor/256x256/apps"
 cp -r "$SRC/." "$DEST/"
-chmod +x "$DEST/orc" "$DEST/engine/librewolf" 2>/dev/null || chmod +x "$DEST/orc"
+chmod +x "$DEST/orc" "$DEST/engine/orc" "$DEST/engine/orc-bin" 2>/dev/null || chmod +x "$DEST/orc"
 ln -sf "$DEST/orc" "$HOME/.local/bin/orc"
 
 # Desktop entry with absolute paths, so launchers find orc even when

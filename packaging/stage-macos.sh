@@ -6,8 +6,8 @@
 # script runs), and builds orc.app around the unmodified LibreWolf.app:
 #
 #   orc.app/Contents/MacOS/orc                              (launcher)
-#   orc.app/Contents/Resources/engine/LibreWolf.app         (engine, intact)
-#   orc.app/Contents/Resources/engine/LibreWolf.app/Contents/Resources/distribution/
+#   orc.app/Contents/Resources/engine/orc.app               (engine, rebranded)
+#   orc.app/Contents/Resources/engine/orc.app/Contents/Resources/distribution/
 #   orc.app/Contents/Resources/profile-seed/user.js
 #   orc.app/Contents/Resources/orc.icns
 #   orc.app/Contents/Info.plist                             (from template)
@@ -48,11 +48,20 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/engine" "$APP/Contents/R
 # The engine rides inside, byte-for-byte as upstream shipped it.
 ditto "$SRC_APP" "$APP/Contents/Resources/engine/LibreWolf.app"
 hdiutil detach "$MNT" >/dev/null
+# Full orc branding: the nested app takes orc's name, its plist
+# display names and executable are renamed, and every display string
+# + logo inside it is rebranded (the patch audits itself). All of it
+# happens BEFORE the seal below, so the seal covers the final bytes.
+mv "$APP/Contents/Resources/engine/LibreWolf.app" "$APP/Contents/Resources/engine/orc.app"
+python3 "$ROOT/packaging/brand-patch.py" patch \
+  "$APP/Contents/Resources/engine/orc.app/Contents/Resources" "$ROOT/branding"
+python3 "$ROOT/packaging/brand-patch.py" macos \
+  "$APP/Contents/Resources/engine/orc.app"
 
 # orc's policy layer lives inside the nested app's Resources.
-mkdir -p "$APP/Contents/Resources/engine/LibreWolf.app/Contents/Resources/distribution"
+mkdir -p "$APP/Contents/Resources/engine/orc.app/Contents/Resources/distribution"
 cp "$ROOT/distribution/policies.json" \
-   "$APP/Contents/Resources/engine/LibreWolf.app/Contents/Resources/distribution/policies.json"
+   "$APP/Contents/Resources/engine/orc.app/Contents/Resources/distribution/policies.json"
 
 cp "$LAUNCHER" "$APP/Contents/MacOS/orc"
 chmod +x "$APP/Contents/MacOS/orc"
@@ -74,7 +83,7 @@ printf 'APPL????' > "$APP/Contents/PkgInfo"
 # not hold; the hardened runtime stays off for ad-hoc builds.
 if command -v codesign >/dev/null 2>&1; then
   codesign --force --deep --sign - --timestamp=none \
-    "$APP/Contents/Resources/engine/LibreWolf.app"
+    "$APP/Contents/Resources/engine/orc.app"
   codesign --force --sign - --timestamp=none "$APP"
   codesign --verify --deep --strict "$APP"
   echo "sealed (ad-hoc) $APP"

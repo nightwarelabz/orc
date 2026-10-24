@@ -39,6 +39,14 @@ PKG="$STAGE_ROOT/orc"
 cp "$LAUNCHER" "$PKG/orc"
 chmod +x "$PKG/orc"
 cp -r "$ENGINE_DIR" "$PKG/engine"
+# Full orc branding: the engine binaries take orc's name (the launcher
+# execs engine/orc, which finds its -bin beside itself), and every
+# display string + logo inside the engine is rebranded (the patch
+# audits itself: it fails the stage if a display file still names
+# LibreWolf).
+mv "$PKG/engine/librewolf" "$PKG/engine/orc"
+mv "$PKG/engine/librewolf-bin" "$PKG/engine/orc-bin"
+python3 "$ROOT/packaging/brand-patch.py" patch "$PKG/engine" "$ROOT/branding"
 mkdir -p "$PKG/engine/distribution"
 cp "$ROOT/distribution/policies.json" "$PKG/engine/distribution/policies.json"
 cp "$ROOT/profile/user.js" "$PKG/profile-seed/user.js"

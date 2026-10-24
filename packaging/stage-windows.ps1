@@ -63,6 +63,25 @@ New-Item -ItemType Directory -Force $stage | Out-Null
 Copy-Item $OrcExe (Join-Path $stage 'orc.exe')
 Copy-Item (Join-Path $Root 'branding\orc.ico') (Join-Path $stage 'orc.ico')
 Copy-Item -Recurse $engineDir (Join-Path $stage 'engine')
+
+# Full orc branding: the engine executable takes orc's name and its
+# version resources follow (rcedit, pinned + hash-verified), and
+# every display string + logo inside the engine is rebranded (the
+# patch audits itself and fails the stage on any leftover).
+Rename-Item (Join-Path $stage 'engine\librewolf.exe') 'orc.exe'
+$py = (Get-Command py -ErrorAction SilentlyContinue)?.Source
+if (-not $py) { $py = (Get-Command python -ErrorAction Stop).Source }
+& $py (Join-Path $Root 'packaging\brand-patch.py') 'patch' (Join-Path $stage 'engine') (Join-Path $Root 'branding')
+if ($LASTEXITCODE -ne 0) { throw 'brand-patch failed' }
+$rceditUrl = 'https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe'
+$rcedit = Join-Path $work 'rcedit.exe'
+Invoke-WebRequest -Uri $rceditUrl -OutFile $rcedit
+$rceditHash = (Get-FileHash -Algorithm SHA256 $rcedit).Hash.ToLowerInvariant()
+if ($rceditHash -ne '3e7801db1a5edbec91b49a24a094aad776cb4515488ea5a4ca2289c400eade2a') {
+    throw "rcedit sha256 mismatch: got $rceditHash"
+}
+& $rcedit (Join-Path $stage 'engine\orc.exe') --set-version-string 'FileDescription' 'orc' --set-version-string 'ProductName' 'orc' --set-version-string 'CompanyName' 'Nightware Labz'
+if ($LASTEXITCODE -ne 0) { throw 'rcedit failed' }
 # orc's policy layer lives inside the engine root as distribution/.
 Copy-Item -Recurse (Join-Path $Root 'distribution') (Join-Path $stage 'engine\distribution')
 # First-run profile seed.
