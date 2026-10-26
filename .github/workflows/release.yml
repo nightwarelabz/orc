@@ -337,8 +337,8 @@ jobs:
           alongside the browser, returning recursive web and image results
           to an in-browser results page. No search telemetry leaves the
           machine beyond the providers Tractor itself queries.
-          
-                    Packages are UNSIGNED for now: Windows SmartScreen and macOS
+
+          Packages are UNSIGNED for now: Windows SmartScreen and macOS
           Gatekeeper will warn - see the repo README for the honest
           install steps. Verify downloads against SHA256SUMS.txt.
 
