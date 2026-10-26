@@ -290,7 +290,9 @@ static int seed_profile(const OrcChar *seed, const OrcChar *target) {
 }
 
 static int profile_path(OrcChar *profile, const OrcWorkspace *ws) {
+#ifndef _WIN32
     const OrcChar *home;
+#endif
 #ifdef _WIN32
     OrcChar current[ORC_PATH_CAP], legacy[ORC_PATH_CAP];
     if (windows_profile_roots(current, legacy)) return -1;
