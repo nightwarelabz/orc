@@ -96,6 +96,7 @@ if (-not (Select-String -Path $cfgPath -SimpleMatch 'pref("librewolf.webgl.promp
 # First-run profile seed.
 New-Item -ItemType Directory -Force (Join-Path $stage 'profile-seed') | Out-Null
 Copy-Item (Join-Path $Root 'profile\user.js') (Join-Path $stage 'profile-seed\user.js')
+Copy-Item (Join-Path $Root 'WORKSPACES.md') (Join-Path $stage 'WORKSPACES.md')
 
 # Portable zip + checksum.
 New-Item -ItemType Directory -Force $OutDir | Out-Null

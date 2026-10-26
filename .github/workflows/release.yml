@@ -234,6 +234,7 @@ jobs:
           mkdir -p smoke && tar -xzf dist/orc-*-linux-x86_64.tar.gz -C smoke
           ./smoke/orc/orc --headless --screenshot "$PWD/smoke.png" --window-size=1280,800 https://nosuchmachine.net/
           [ -f smoke.png ] && [ "$(stat -c%s smoke.png)" -gt 20000 ] || { echo "smoke screenshot missing or tiny"; exit 1; }
+          python3 tests/browser_recursion.py "$PWD/smoke/orc/orc"
           echo "smoke ok"
       - uses: actions/upload-artifact@v4
         with:
