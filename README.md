@@ -97,13 +97,30 @@ sidecar) every time a package is built.
 
 First run on every OS lands on https://nosuchmachine.net/.
 
+## Recursive workspaces
+
+Orc can branch a browsing session into named, independent contexts:
+
+```sh
+orc --orc-workspace blacksite --orc-child research https://nosuchmachine.net/
+orc --orc-workspace blacksite/research --orc-workspace-info
+orc --orc-workspace blacksite/research --orc-parent
+```
+
+Each branch has its own profile and explicit parent; nesting is bounded
+at 16 levels. The default profile and first-run home stay the same.
+Named branches run independently; close a branch before reopening that
+same branch. See [WORKSPACES.md](WORKSPACES.md) for paths, inheritance,
+limits, and the distinction between workspace state and web-frame recursion.
+
 ## How it's put together
 
 - `launcher/launcher.c` — one small C file, compiled per OS in CI. It
   finds the engine beside itself, creates orc's profile folder and
   seeds `user.js` there **once** (your edits are never overwritten),
-  and launches the engine with `-profile <orc profile>` plus whatever
-  arguments you passed.
+  and launches the engine with `-profile <orc profile>`. It selects
+  named parent/child workspace profiles, exports their lineage, and forwards
+  other engine arguments. Profile selectors remain owned by Orc.
 - `distribution/policies.json` — orc's policy layer, shipped inside the
   engine folder: no telemetry, no Pocket, no sponsored content,
   HTTPS-only, strict tracking protection, uBlock Origin force-installed,
@@ -125,3 +142,9 @@ Push a `v*` tag, or run the **release** workflow manually from the
 Actions tab. CI verifies the engine checksums, compiles the launcher
 on each OS, stages the packages, and — on a tag — publishes them as a
 GitHub Release with `SHA256SUMS.txt`.
+
+## Development checks
+
+Run `python -m unittest discover -s tests -v` with a C compiler available
+(on Windows, use a Visual Studio developer shell). The checks compile the
+launcher and use a local test engine; they never touch your actual profile.
