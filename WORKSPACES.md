@@ -53,6 +53,8 @@ pass `--orc-workspace` explicitly there.
 - A path has at most 16 segments. Empty segments, traversal, dots,
   absolute filesystem paths, backslashes, and Windows device names
   are rejected on every OS.
+- The full profile path must also fit the operating system's path limit;
+  Orc reports an error instead of truncating a long path.
 - A branch's profile is under
   `<orc data directory>/workspaces/<name>/children/<name>/…/profile`.
   The `children` boundary ensures a descendant is never stored inside
@@ -94,3 +96,12 @@ workspace environment, default-profile compatibility, lineage, path
 rejection, permissions, and profile preservation. No live browsing,
 engine download, third-party Python package, or real user profile is
 needed. The same checks run on Linux, macOS, and Windows in CI.
+
+The Linux CI job also stages the checksum-verified, pinned engine and runs
+`python tests/browser_recursion.py <staged launcher>`. Two simultaneous
+workspaces each load four nested documents. Every level must execute Wasm
+and exchange shared memory with a worker while staying cross-origin
+isolated; cookies and local storage must stay within the selected
+workspace. A forbidden iframe must remain blocked. The release workflow
+repeats this check against the extracted Linux artifact. The fixture only
+binds to loopback and uses temporary profiles.

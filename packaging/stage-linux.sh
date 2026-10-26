@@ -59,6 +59,7 @@ if ! grep -q 'librewolf.webgl.prompt' "$CFG"; then
 fi
 grep -q 'pref("librewolf.webgl.prompt", false)' "$CFG" || { echo "stage-linux: orc autoconfig append missing from librewolf.cfg" >&2; exit 1; }
 cp "$ROOT/profile/user.js" "$PKG/profile-seed/user.js"
+cp "$ROOT/WORKSPACES.md" "$PKG/WORKSPACES.md"
 for s in 512 256 128 64 32 16; do
   cp "$ROOT/branding/orc-$s.png" "$PKG/icons/orc-$s.png"
 done

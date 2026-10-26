@@ -77,6 +77,7 @@ grep -q 'pref("librewolf.webgl.prompt", false)' "$CFG" || { echo "stage-macos: o
 cp "$LAUNCHER" "$APP/Contents/MacOS/orc"
 chmod +x "$APP/Contents/MacOS/orc"
 cp "$ROOT/profile/user.js" "$APP/Contents/Resources/profile-seed/user.js"
+cp "$ROOT/WORKSPACES.md" "$APP/Contents/Resources/WORKSPACES.md"
 cp "$ICNS" "$APP/Contents/Resources/orc.icns"
 sed "s/__VERSION__/$VERSION/g" "$ROOT/packaging/Info.plist.tmpl" > "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"

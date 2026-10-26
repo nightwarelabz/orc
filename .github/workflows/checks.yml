@@ -2,7 +2,7 @@ name: checks
 
 on:
   push:
-    branches: [main, 'codex/**']
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -26,3 +26,35 @@ jobs:
         if: runner.os == 'Windows'
       - name: Check launcher and workspace behavior
         run: python -m unittest discover -s tests -v
+
+  browser:
+    name: Recursive browsing (pinned Linux engine)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download and verify pinned engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAN=installers/engine-manifest.json
+          BASE=$(jq -r .source "$MAN")
+          FILE=$(jq -r '.artifacts["linux-x86_64"].file' "$MAN")
+          PIN=$(jq -r '.artifacts["linux-x86_64"].sha256' "$MAN")
+          mkdir -p build
+          curl --fail --location --retry 3 "$BASE$FILE" -o build/engine.tar.xz
+          curl --fail --location --retry 3 "$BASE$FILE.sha256sum" -o build/engine.sha256sum
+          ACTUAL=$(sha256sum build/engine.tar.xz | cut -d ' ' -f 1)
+          SIDECAR=$(awk '{print $1}' build/engine.sha256sum)
+          [ "$ACTUAL" = "$PIN" ] && [ "$ACTUAL" = "$SIDECAR" ]
+      - name: Build and stage Orc
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh packaging/build-launcher.sh linux build/orc
+          sh packaging/stage-linux.sh build/engine.tar.xz ci build/orc dist
+      - name: Exercise nested documents and independent workspace storage
+        run: python tests/browser_recursion.py dist/stage-linux-x86_64/orc/orc
