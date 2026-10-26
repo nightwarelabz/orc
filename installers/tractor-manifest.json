@@ -1,24 +1,24 @@
 {
   "product": "Tractor",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "sourceTemplate": "https://github.com/nightwarelabz/tractor/releases/download/v{version}/",
   "checksumFile": "SHA256SUMS.txt",
   "artifacts": {
     "windows-x86_64": {
-      "file": "Tractor-0.5.0-windows-x86_64.zip",
-      "sha256": "040fca6c434723f5c630dfe6b9230ddc0482c2831818d80f714eeeb5688fb43b"
+      "file": "Tractor-0.5.1-windows-x86_64.zip",
+      "sha256": "f2df938d0d062d78fdb41ede5b57d9574bd62fe8941f8139106a0513c5b41873"
     },
     "macos-arm64": {
-      "file": "Tractor-0.5.0-macos-arm64.tar.gz",
-      "sha256": "449a0788d2fea185b47b6f277e66e698a6dc85c234b024ab42ccb724c36aba23"
+      "file": "Tractor-0.5.1-macos-arm64.tar.gz",
+      "sha256": "1d1296368352021ccdd9b811c0a094d99034bd05d07bf1f7bd4b639837e073b7"
     },
     "macos-x86_64": {
-      "file": "Tractor-0.5.0-macos-x86_64.tar.gz",
-      "sha256": "c50af36691c98e6ce1ce253406251e05916f33fa01435f4807ec6cf2c379c2c4"
+      "file": "Tractor-0.5.1-macos-x86_64.tar.gz",
+      "sha256": "413224400a3d50850607b4da7766aa581345afb7849b002da7a24abfc48e2633"
     },
     "linux-x86_64": {
-      "file": "Tractor-0.5.0-linux-x86_64.tar.gz",
-      "sha256": "fc59a358a012015004422b2e887aec66c2fb604c8e3084e69b2fa9d949a540fa"
+      "file": "Tractor-0.5.1-linux-x86_64.tar.gz",
+      "sha256": "13a9cdb79240cf20d244c74f9be150d738caed8ce7d84832ed2f19f0b3173d82"
     }
   },
   "checksumPolicy": "Each bundled Tractor archive is checked against this pinned SHA-256 and the matching entry in the versioned release SHA256SUMS.txt."

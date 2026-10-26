@@ -419,7 +419,11 @@ static int launch_search_service(const OrcChar *dir) {
     }
 #endif
     int ready = 0;
-    for (int attempt = 0; attempt < 100; attempt++) {
+    /* 600 attempts x 50 ms = 30 s. A cold PyInstaller/Qt start on a
+     * slow machine outlasts the old 5 s window easily; the loop still
+     * bails at once if the child dies, so a long window costs nothing
+     * on the failure path. */
+    for (int attempt = 0; attempt < 600; attempt++) {
         if (search_service_ready(pid_file)) {
             ready = 1;
             break;
