@@ -332,6 +332,12 @@ jobs:
           (MPL-2.0), orc's native launcher, policies, profile seed, recursive
           workspaces, and canonical icon.
 
+          Tractor 0.5.0 is bundled and wired in as orc's default search
+          engine: a local, loopback-only search service the launcher starts
+          alongside the browser, returning recursive web and image results
+          to an in-browser results page. No search telemetry leaves the
+          machine beyond the providers Tractor itself queries.
+
           Packages are UNSIGNED for now: Windows SmartScreen and macOS
           Gatekeeper will warn - see the repo README for the honest
           install steps. Verify downloads against SHA256SUMS.txt.
