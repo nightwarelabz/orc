@@ -98,7 +98,11 @@ static int self_dir(OrcChar *out) {
 #endif
     if (!slash) return -1;
     /* Keep the separator when the executable lives at the filesystem root. */
-    if (slash == out) slash[1] = 0;
+    if (slash == out
+#ifdef _WIN32
+        || (slash == out + 2 && out[1] == L':')
+#endif
+    ) slash[1] = 0;
     else *slash = 0;
     return 0;
 }
@@ -188,6 +192,7 @@ static int seed_profile(const OrcChar *seed, const OrcChar *target) {
     /* lstat also protects dangling symlinks: never replace a user's entry. */
     if (!lstat(target, &st)) return regular_file(target) ? 0 : -1;
     if (errno != ENOENT) return -1;
+    if (!regular_file(seed)) return -1;
     int input = open(seed, O_RDONLY);
     if (input < 0) return -1;
     OrcChar staging[ORC_PATH_CAP];
@@ -244,7 +249,7 @@ static int profile_path(OrcChar *profile, const OrcWorkspace *ws) {
     if (path_append(profile, ORC_TEXT("Nightware Labz\\orc"))) return -1;
 #elif defined(__APPLE__)
     home = getenv("HOME");
-    if (!home || !*home || path_copy(profile, home) ||
+    if (!home || home[0] != '/' || path_copy(profile, home) ||
         path_append(profile, "Library/Application Support/orc")) return -1;
 #else
     home = getenv("XDG_DATA_HOME");
@@ -351,10 +356,11 @@ static int launch_engine(const OrcChar *engine, const OrcChar *dir,
     PROCESS_INFORMATION pi = {0};
     si.cb = sizeof(si);
     BOOL started = CreateProcessW(engine, command, NULL, NULL, FALSE, 0, NULL, dir, &si, &pi);
+    DWORD error = started ? 0 : GetLastError();
     free(command);
     free(args);
     if (!started) {
-        fprintf(stderr, "orc: could not start engine (Windows error %lu)\n", GetLastError());
+        fprintf(stderr, "orc: could not start engine (Windows error %lu)\n", error);
         return -1;
     }
     CloseHandle(pi.hThread);

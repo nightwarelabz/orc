@@ -55,12 +55,31 @@ files, the files are wrong and this document is the bug report.
   WebGL carries is the same trade as the RFP choice above: stated,
   not hidden.
 - The launcher is a small native program: fixed relative engine
-  path, no shell, arguments forwarded verbatim, and a profile that
-  lives in orc's own folder — separate from any Firefox/LibreWolf
-  profile, seeded once and never overwritten.
+  path, no shell, engine arguments forwarded verbatim after consuming
+  Orc's workspace options. Engine profile selectors are reserved so
+  they cannot redirect a launch outside the selected Orc context.
+- The default profile stays in Orc's existing folder, separate from
+  any Firefox/LibreWolf profile. Named parent/child workspaces have
+  independent profiles; they do not copy credentials or state from
+  their parent. Names are canonicalized and bounded to 16 levels.
+  This separates browser state, not OS process privileges.
+- Named workspaces use Gecko's `-no-remote` flag and profile locks:
+  one branch cannot hand its launch to a running parent, and two
+  processes cannot open the same profile concurrently. Selecting a
+  parent does not close or focus existing browser windows.
+- First-run settings are published completely before the engine starts,
+  without overwriting a pre-existing `user.js`. On POSIX systems, new
+  profile directories use mode `0700` and new settings files `0600`.
+  Existing profile permissions and user settings are preserved.
 
 ## The nest (nosuchmachine.net inside orc)
 
+- Orc preserves Gecko's origin, framing, certificate, CSP, COOP, and
+  COEP checks. Shipping the engine makes its capabilities consistent;
+  it does not make cross-origin isolation automatic or grant pages
+  permission to frame sites that forbid embedding. The pinned-engine
+  CI fixture verifies four nested document levels, isolated workers,
+  Wasm, shared memory, independent workspace storage, and a denied frame.
 - The site is a static page plus narrow, guarded functions. Its bench
   probes pass a shared SSRF guard (public targets only, DNS-checked,
   re-validated on every redirect hop).

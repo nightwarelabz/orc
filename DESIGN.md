@@ -26,8 +26,8 @@ borrows the host's engine.
    Mozilla's official distribution mechanism: a `distribution/` folder with
    `policies.json`, plus autoconfig + a seeded profile (`user.js`).
    orc wraps **unmodified LibreWolf/Firefox engine binaries**, adds its own
-   name, branding, profile folder, home (nosuchmachine.net), hardening and
-   update checks. Because the engine binary itself ships in the installer,
+   name, branding, workspace profiles, home (nosuchmachine.net), and hardening.
+   Because the engine binary itself ships in the installer,
    the same Gecko runs on Windows, macOS and Linux — neutral by
    construction, shippable now, no 30 GB build farm.
    - License: engine MPL-2.0. LibreWolf itself is MPL-2.0.
@@ -67,10 +67,30 @@ installer (per OS)
 - **Blocker:** uBlock Origin force-installed by policy (LibreWolf does the same).
 - **No account, no telemetry, no Pocket, no sponsored anything** — by policy,
   not by promise.
-- **Blacksite inside orc:** with our own engine there is no foreign CSP/
-  COEP lottery: Blacksite's headers are served as authored, phantom's
-  SharedArrayBuffer ring gets cross-origin isolation on our terms, and the
-  OS's Wasm/worker scope works identically for every user.
+- **Blacksite inside orc:** all platforms get the same Gecko version.
+  Blacksite's headers must still establish cross-origin isolation for
+  SharedArrayBuffer, workers and nested documents. Orc retains CSP, COOP,
+  COEP and framing checks; it does not override the server's policy.
+
+## Recursive workspace boundary
+
+The launcher now models a workspace as a canonical path with an explicit
+parent and a maximum depth of 16. `--orc-child` descends into a separate
+profile; `--orc-parent` selects its ancestor; `--orc-workspace-info` reports
+the lineage without launching the engine or writing any profile data.
+The default workspace uses the original profile path. Named branches use
+`-no-remote` so their URLs cannot land in another running browser context.
+
+Each branch is seeded independently. No parent's cookies, permissions,
+saved passwords or session data are copied. This layer supplies context
+identity and browser state separation; it does not infer page ancestry,
+automatically create a tab tree, or create OS security sandboxes.
+[WORKSPACES.md](WORKSPACES.md) defines the command-line contract and paths.
+
+Native regression checks run on Windows, macOS and Linux. Linux CI also
+stages the pinned engine and loads two simultaneous workspaces with four
+nested document levels each, checking isolated workers, Wasm, shared
+memory, storage separation and a frame denied by server policy.
 
 ## orc inside Blacksite OS (the third surface)
 
@@ -95,7 +115,9 @@ the system browser instead. The in-OS app is a door, not a fake engine.
 
 ## Status
 
-Prepared locally (2026-10-24): this design, validated `policies.json`,
-hardening `user.js`, fork scaffold notes, installer plan.
-NOT yet: engine binaries bundled, installers built, signed, or published;
-in-OS orc app not yet integrated. Next steps in README.md.
+The repository ships a native launcher, per-platform staging scripts,
+release packaging, policies, branding and recursive workspace profiles.
+The release workflow builds the packages; paid signing and notarization
+remain future work. `UPDATES.md` describes the planned update subsystem,
+not implemented launcher functionality. The in-OS browsing room is
+maintained in the nosuchmachine.net repository.

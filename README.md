@@ -1,8 +1,9 @@
 # orc
 
-orc is Nightware Labz' own browser —
-our version of LibreWolf, wrapped as a system you install once and run
-anywhere. Its mark is the pixel orc face in `branding/` — orc's browser
+orc is Nightware Labz' recursive browser subsystem —
+a bundled LibreWolf engine with explicit parent/child browsing workspaces,
+wrapped as a system you install once and run anywhere.
+Its mark is the pixel orc face in `branding/` — orc's browser
 icon and main icon everywhere.
 
 Install orc, open it, and you're in Blacksite at nosuchmachine.net — with
