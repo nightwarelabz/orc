@@ -1,28 +1,29 @@
-# orc
+<p align="center">
+  <img src="branding/orc-256.png" width="168" alt="orc">
+</p>
 
-orc is Nightware Labz' recursive browser subsystem —
-a bundled LibreWolf engine with explicit parent/child browsing workspaces,
-wrapped as a system you install once and run anywhere.
-Its mark is the pixel orc face in `branding/` — orc's browser
-icon and main icon everywhere.
+<h1 align="center">orc</h1>
 
-Install orc, open it, and you're in Blacksite at nosuchmachine.net — with
-the same engine, the same rules, and the same privacy posture on Windows,
-macOS and Linux. No host browser decides how Blacksite behaves. That's
-what browser-neutral means, and it's the recursion that matters: open
-nosuchmachine.net *inside* orc and the whole nest — Blacksite OS,
-phantom, the bench — runs there exactly as it does anywhere else,
-because the engine it runs on is the one orc carries.
+<p align="center"><strong>A recursive browser with explicit parent/child workspaces.</strong></p>
 
-orc is built on Mozilla's open-source Gecko technology (the LibreWolf /
-Firefox engine line, MPL-2.0). orc and Nightware Labz are not officially
-associated with Mozilla or its products, or with the LibreWolf project.
+orc carries a pinned Gecko engine, a hardened policy layer, and isolated
+browsing workspaces in one install for Windows, macOS, and Linux. Install
+orc, open it, and the first run lands on Blacksite at
+[nosuchmachine.net](https://nosuchmachine.net/).
+
+The pixel orc face in [`branding/`](branding/) is the sole product mark.
+The app, installers, shortcuts, desktop entries, taskbar and dock surfaces,
+About pages, and repository documentation all use the same mark and the same
+lowercase name: **orc**.
+
+orc is built on Mozilla's open-source Gecko technology (MPL-2.0) and is not
+officially associated with Mozilla or its products.
 
 ## Download
 
 Get the current build from the
-[Releases page](https://github.com/nightwarelabz/orc/releases), and
-check it against `SHA256SUMS.txt` from the same release.
+[Releases page](https://github.com/nightwarelabz/orc/releases), then verify it
+against `SHA256SUMS.txt` from the same release.
 
 | OS | Package | Notes |
 |----|---------|-------|
@@ -33,74 +34,55 @@ check it against `SHA256SUMS.txt` from the same release.
 
 ### These builds are unsigned — for now
 
-No code-signing certificate yet, so your OS will warn you. That's a
-fact about v1, stated plainly, not a defect in the package:
+No paid code-signing identity is attached yet, so Windows and macOS will warn
+on first launch.
 
-- **Windows:** SmartScreen may say "Windows protected your PC" →
-  *More info* → *Run anyway*.
-- **macOS:** see the section below — Gatekeeper needs a word.
-- **Linux:** no warnings; `install.sh` is a short shell script — read
-  it before you run it, it's meant to be read.
+- **Windows:** SmartScreen may show *Windows protected your PC*. Choose
+  **More info → Run anyway** after verifying the checksum.
+- **macOS:** follow the one-time Gatekeeper step below.
+- **Linux:** `install.sh` is a short, readable per-user install script.
 
-#### macOS: the "could not verify" dialog is expected
+#### macOS first launch
 
-orc is not yet signed with an Apple Developer ID and is not
-notarized. That is the whole story behind the warning: on first open,
-macOS says **Apple could not verify "orc" is free of malware** and
-offers only *Done* / *Move to Trash*. Every unsigned app downloaded
-from the internet gets this dialog — it is Gatekeeper's default
-answer when it has no developer identity to check, not a finding
-about orc itself.
+orc is ad-hoc sealed, but it is not yet signed with an Apple Developer ID or
+notarized. On first open, macOS may say it cannot verify `orc` and offer only
+**Done** or **Move to Trash**.
 
-To open it the first time:
+1. Open `orc.app` once and dismiss the warning.
+2. Open **System Settings → Privacy & Security**.
+3. Find the message that `orc` was blocked, choose **Open Anyway**, and
+   authenticate if asked.
 
-1. Try to open `orc.app` once, so macOS registers the block, and
-   dismiss the dialog.
-2. Open **System Settings → Privacy & Security** and scroll to the
-   Security section: *"orc" was blocked to protect your Mac*.
-3. Click **Open Anyway**, confirm, and authenticate if asked.
+The approval is remembered. The terminal equivalent is:
 
-That approval is remembered — orc launches normally from then on.
-The terminal equivalent, if you prefer it:
-`xattr -dr com.apple.quarantine /Applications/orc.app`
+```sh
+xattr -dr com.apple.quarantine /Applications/orc.app
+```
 
-One distinction worth knowing: **"damaged" is a different verdict,
-and you should never see it.** The bundle ships ad-hoc sealed, so its
-contents are verifiably intact. If macOS ever calls orc "damaged",
-the download was corrupted or altered in transit — delete it,
-re-download from the Releases page, and check the file against
-`SHA256SUMS.txt` before opening it.
+The bundle is sealed and verified in CI, so a **damaged** verdict is not the
+normal unsigned-app warning. If that appears, delete the download, fetch it
+again, and verify `SHA256SUMS.txt` before opening it.
 
-Until orc is enrolled and notarized, this first-open step is simply
-the price of an unsigned build. The packages themselves are built in
-the open, in CI, from this repository — the same pipeline whose
-checksums you can verify yourself.
-
-Inside, the engine is the **unmodified** LibreWolf build, verified
-against two checksums (ours, pinned in
-`installers/engine-manifest.json`, and LibreWolf's own published
-sidecar) every time a package is built.
+The pinned engine artifact is verified twice during every build: once against
+the SHA-256 recorded in `installers/engine-manifest.json` and again against
+the publisher's release sidecar.
 
 ## Install, per OS
 
-- **Windows:** run the setup .exe (installs to `%LOCALAPPDATA%\orc`,
-  adds a Start Menu shortcut, registers an uninstaller), or unzip the
-  portable build anywhere and run `orc.exe`. Your profile lives in
-  `%APPDATA%\Nightware Labz\orc\profile`. Uninstalling removes the
-  program; your profile stays unless you delete it yourself.
-- **macOS:** unzip, move `orc.app` to Applications, then do the
-  one-time Gatekeeper approval described above. Your profile lives in
+- **Windows:** run the setup executable, or unzip the portable build and run
+  `orc.exe`. The installed app lives in `%LOCALAPPDATA%\orc`; its profile is
+  `%APPDATA%\orc\profile`. Uninstalling removes the program but preserves the
+  profile.
+- **macOS:** move `orc.app` to Applications and complete the one-time
+  Gatekeeper approval. The profile is
   `~/Library/Application Support/orc/profile`.
-- **Linux:** extract the tarball, `cd orc && ./install.sh`. It copies
-  orc to `~/.local/share/orc`, links `~/.local/bin/orc`, and registers
-  the desktop entry. Your profile lives in `~/.local/share/orc/profile`
-  (or `$XDG_DATA_HOME/orc/profile`). Then just run `orc`.
-
-First run on every OS lands on https://nosuchmachine.net/.
+- **Linux:** extract the archive, run `cd orc && ./install.sh`, then launch
+  `orc`. The profile is `~/.local/share/orc/profile` or
+  `$XDG_DATA_HOME/orc/profile`.
 
 ## Recursive workspaces
 
-Orc can branch a browsing session into named, independent contexts:
+orc can branch a browsing session into named, independent contexts:
 
 ```sh
 orc --orc-workspace blacksite --orc-child research https://nosuchmachine.net/
@@ -108,44 +90,59 @@ orc --orc-workspace blacksite/research --orc-workspace-info
 orc --orc-workspace blacksite/research --orc-parent
 ```
 
-Each branch has its own profile and explicit parent; nesting is bounded
-at 16 levels. The default profile and first-run home stay the same.
-Named branches run independently; close a branch before reopening that
-same branch. See [WORKSPACES.md](WORKSPACES.md) for paths, inheritance,
-limits, and the distinction between workspace state and web-frame recursion.
+Each branch has its own profile and explicit parent; nesting is bounded at 16
+levels. Named branches run independently, but the same branch cannot be opened
+twice because Gecko retains its normal profile lock. See
+[WORKSPACES.md](WORKSPACES.md) for paths, inheritance, limits, and the
+distinction between workspace state and web-frame recursion.
 
-## How it's put together
+## Search
 
-- `launcher/launcher.c` — one small C file, compiled per OS in CI. It
-  finds the engine beside itself, creates orc's profile folder and
-  seeds `user.js` there **once** (your edits are never overwritten),
-  and launches the engine with `-profile <orc profile>`. It selects
-  named parent/child workspace profiles, exports their lineage, and forwards
-  other engine arguments. Profile selectors remain owned by Orc.
-- `distribution/policies.json` — orc's policy layer, shipped inside the
-  engine folder: no telemetry, no Pocket, no sponsored content,
-  HTTPS-only, strict tracking protection, uBlock Origin force-installed,
-  DuckDuckGo default, Blacksite home + toolbar bookmarks.
-- `packaging/` — the staging scripts that download, verify, and wrap
-  the engine per OS (`stage-windows.ps1`, `stage-macos.sh`,
-  `stage-linux.sh`), plus the launcher build scripts.
-- `installers/engine-manifest.json` — the pinned engine: LibreWolf
-  158.0.1-2 from dl.librewolf.net, SHA-256 per artifact.
-- `branding/` — the face: master, transparent cutout, PNG ladder,
-  `orc.ico`, `orc.iconset`. Sizes and formats only; never redrawn.
-- `fork/` — the v2 true-source-fork scaffold (branding + mozconfig),
-  for when a wrapped engine is no longer enough.
-- `DESIGN.md` — the checked options and why the wraparound won for v1.
+Tractor is orc's default search engine. The browser launches Tractor's native
+service locally and opens its in-browser results page for address-bar searches.
+The service listens only on `127.0.0.1`, keeps results and history in orc's
+local profile data, and stops after the orc processes using it close. Tractor
+searches the enabled public providers; the defaults include DuckDuckGo web
+results and Wikimedia Commons images with license and creator attribution.
+Coverage depends on provider availability. Website result links open in orc.
+
+## How it is put together
+
+- `launcher/launcher.c` — a small native launcher compiled per OS. It locates
+  the bundled engine, creates orc's profile, seeds `user.js` and the default
+  browser chrome stylesheet when absent, selects parent/child workspace
+  profiles, starts or reuses Tractor's local search service, exports their
+  lineage, and forwards all other engine arguments.
+- `distribution/policies.json` — the policy layer: no telemetry, Pocket, or
+  sponsored content; HTTPS-only mode; strict tracking protection; uBlock
+  Origin; Tractor as the default search engine; and Blacksite home/bookmarks.
+- `distribution/distribution.ini` and `profile/chrome/userChrome.css` — the
+  orc dark green default for browser chrome, tabs, and toolbar controls.
+- `packaging/` — platform staging, complete display-string rebranding, icon
+  replacement, and launcher builds.
+- `installers/engine-manifest.json` — the pinned Gecko artifact set and SHA-256
+  values.
+- `installers/tractor-manifest.json` — the pinned Tractor service bundles and
+  SHA-256 values.
+- `branding/` — the canonical orc face: source art, transparent master, PNG
+  ladder, Windows ICO, and macOS iconset.
+- `fork/` — the source-build scaffold for a future direct Gecko fork.
+- `DESIGN.md` — architectural decisions and boundaries.
 
 ## Building a release
 
-Push a `v*` tag, or run the **release** workflow manually from the
-Actions tab. CI verifies the engine checksums, compiles the launcher
-on each OS, stages the packages, and — on a tag — publishes them as a
-GitHub Release with `SHA256SUMS.txt`.
+Push a `v*` tag, or run the **release** workflow manually from Actions. CI
+verifies the engine checksums, compiles the launcher, applies orc branding and
+icons, verifies and stages Tractor, audits the staged browser, builds each
+package, and publishes `SHA256SUMS.txt` with tagged releases.
 
 ## Development checks
 
-Run `python -m unittest discover -s tests -v` with a C compiler available
-(on Windows, use a Visual Studio developer shell). The checks compile the
-launcher and use a local test engine; they never touch your actual profile.
+Run:
+
+```sh
+python -m unittest discover -s tests -v
+```
+
+A C compiler is required; on Windows, use a Visual Studio developer shell.
+The checks use temporary profiles and never touch a real orc profile.

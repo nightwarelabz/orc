@@ -1,0 +1,62 @@
+/* orc dark green browser chrome. These rules apply to the browser UI only. */
+@-moz-document url("chrome://browser/content/browser.xhtml") {
+  :root {
+    color-scheme: dark !important;
+    --toolbar-bgcolor: #172117 !important;
+    --toolbar-color: #e9eee2 !important;
+    --toolbar-field-background-color: #202d1e !important;
+    --toolbar-field-color: #f2f5ed !important;
+    --toolbar-field-border-color: #536743 !important;
+    --toolbar-field-focus-background-color: #263622 !important;
+    --toolbar-field-focus-color: #f7f8f2 !important;
+    --tab-selected-bgcolor: #344925 !important;
+    --lwt-accent-color: #172117 !important;
+    --lwt-text-color: #e9eee2 !important;
+    --lwt-selected-tab-background-color: #344925 !important;
+    --lwt-selected-tab-text-color: #f7f8f2 !important;
+    --lwt-toolbar-field-background-color: #202d1e !important;
+    --lwt-toolbar-field-color: #f2f5ed !important;
+    --lwt-toolbar-field-border-color: #536743 !important;
+    --arrowpanel-background: #202d1e !important;
+    --arrowpanel-color: #e9eee2 !important;
+    --arrowpanel-border-color: #536743 !important;
+    --panel-background: #202d1e !important;
+    --panel-color: #e9eee2 !important;
+  }
+
+  #navigator-toolbox,
+  #toolbar-menubar,
+  #TabsToolbar,
+  #nav-bar,
+  #PersonalToolbar {
+    color: #e9eee2 !important;
+    background-color: #172117 !important;
+  }
+
+  .tab-background[selected],
+  .tab-background[multiselected] {
+    background-color: #344925 !important;
+  }
+
+  .tabbrowser-tab:not([selected]):hover .tab-background {
+    background-color: #263622 !important;
+  }
+
+  #urlbar-background,
+  #searchbar {
+    background-color: #202d1e !important;
+    border-color: #536743 !important;
+  }
+
+  #urlbar[focused] > #urlbar-background {
+    border-color: #7c9537 !important;
+    outline-color: #7c9537 !important;
+  }
+
+  #sidebar-box,
+  #sidebar,
+  #sidebar-header {
+    color: #e9eee2 !important;
+    background-color: #19231a !important;
+  }
+}

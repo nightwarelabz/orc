@@ -1,10 +1,9 @@
 name: release
 
-# Builds the orc wraparound packages for Windows, macOS and Linux
-# around the pinned, unmodified LibreWolf engine recorded in
-# installers/engine-manifest.json. Every engine artifact is verified
-# twice (manifest sha256 AND the official dl.librewolf.net sidecar)
-# before anything is staged.
+# Builds the orc packages for Windows, macOS, and Linux around the pinned
+# Gecko engine recorded in installers/engine-manifest.json. Every engine
+# artifact is verified against both the manifest SHA-256 and its publisher
+# sidecar before anything is staged.
 #
 # - Run manually (workflow_dispatch) to produce downloadable artifacts.
 # - Push a v* tag to also cut a GitHub Release with SHA256SUMS.
@@ -29,6 +28,7 @@ jobs:
     outputs:
       version: ${{ steps.meta.outputs.version }}
       engine_version: ${{ steps.meta.outputs.engine_version }}
+      engine_source: ${{ steps.meta.outputs.engine_source }}
       windows_x86_64_file: ${{ steps.meta.outputs.windows_x86_64_file }}
       windows_x86_64_sha: ${{ steps.meta.outputs.windows_x86_64_sha }}
       windows_arm64_file: ${{ steps.meta.outputs.windows_arm64_file }}
@@ -52,11 +52,20 @@ jobs:
             VERSION="${VERSION:-0.1.0}"
           fi
           MAN=installers/engine-manifest.json
+          ENGINE_VERSION="$(jq -r .engineVersion "$MAN")"
+          UPSTREAM="$(jq -r '.upstreamIdParts | join("")' "$MAN")"
+          SOURCE="$(jq -r .sourceTemplate "$MAN")"
+          SOURCE="${SOURCE//\{upstream\}/$UPSTREAM}"
+          SOURCE="${SOURCE//\{version\}/$ENGINE_VERSION}"
           {
             echo "version=$VERSION"
-            echo "engine_version=$(jq -r .engineVersion "$MAN")"
+            echo "engine_version=$ENGINE_VERSION"
+            echo "engine_source=$SOURCE"
             for k in windows-x86_64 windows-arm64 macos-arm64 macos-x86_64 linux-x86_64; do
-              echo "${k//-/_}_file=$(jq -r ".artifacts.\"$k\".file" "$MAN")"
+              TEMPLATE="$(jq -r ".artifacts.\"$k\".fileTemplate" "$MAN")"
+              FILE="${TEMPLATE//\{upstream\}/$UPSTREAM}"
+              FILE="${FILE//\{version\}/$ENGINE_VERSION}"
+              echo "${k//-/_}_file=$FILE"
               echo "${k//-/_}_sha=$(jq -r ".artifacts.\"$k\".sha256" "$MAN")"
             done
           } >> "$GITHUB_OUTPUT"
@@ -76,6 +85,21 @@ jobs:
       - name: Build launcher
         shell: pwsh
         run: ./packaging/build-launcher.ps1 -Out build/orc.exe -Icon branding/orc.ico
+      - name: Download and verify Tractor search service
+        shell: pwsh
+        run: |
+          $manifest = Get-Content installers\tractor-manifest.json -Raw | ConvertFrom-Json
+          $artifact = $manifest.artifacts.'windows-x86_64'
+          $base = $manifest.sourceTemplate.Replace('{version}', $manifest.version)
+          $archive = Join-Path $PWD 'build\tractor.zip'
+          New-Item -ItemType Directory -Force (Split-Path $archive) | Out-Null
+          Invoke-WebRequest -Uri "$base$($artifact.file)" -OutFile $archive
+          Invoke-WebRequest -Uri "$base$($manifest.checksumFile)" -OutFile "$archive.sums"
+          $actual = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
+          $entry = Get-Content "$archive.sums" | Where-Object { ($_ -split '\s+', 2)[1] -eq $artifact.file } | Select-Object -First 1
+          if (-not $entry) { throw 'Tractor archive is missing from SHA256SUMS.txt' }
+          $sidecar = ($entry -split '\s+', 2)[0].ToLowerInvariant()
+          if ($actual -ne $artifact.sha256 -or $actual -ne $sidecar) { throw "Tractor SHA-256 mismatch: got $actual" }
       - name: Stage package (downloads + verifies the engine itself)
         shell: pwsh
         run: >
@@ -84,6 +108,7 @@ jobs:
           -Version ${{ needs.meta.outputs.version }}
           -OrcExe build/orc.exe
           -OutDir dist
+          -TractorZip build\tractor.zip
       - name: Build NSIS installer
         shell: pwsh
         run: |
@@ -150,14 +175,30 @@ jobs:
           set -euo pipefail
           FILE="${{ needs.meta.outputs[format('{0}_file', matrix.file_key)] }}"
           SHA="${{ needs.meta.outputs[format('{0}_sha', matrix.file_key)] }}"
-          BASE="https://dl.librewolf.net/librewolf/${{ needs.meta.outputs.engine_version }}"
-          curl -fL "$BASE/$FILE" -o engine.dmg
-          curl -fL "$BASE/$FILE.sha256sum" -o engine.dmg.sha256sum
+          BASE="${{ needs.meta.outputs.engine_source }}"
+          curl -fL "$BASE$FILE" -o engine.dmg
+          curl -fL "$BASE$FILE.sha256sum" -o engine.dmg.sha256sum
           ACTUAL="$(shasum -a 256 engine.dmg | awk '{print $1}')"
           SIDECAR="$(awk '{print $1}' engine.dmg.sha256sum)"
           [ "$ACTUAL" = "$SHA" ] || { echo "sha256 mismatch vs manifest"; exit 1; }
           [ "$ACTUAL" = "$SIDECAR" ] || { echo "sha256 mismatch vs sidecar"; exit 1; }
           echo "verified $FILE $ACTUAL"
+      - name: Download + verify Tractor search service
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAN=installers/tractor-manifest.json
+          VERSION=$(jq -r .version "$MAN")
+          KEY="macos-${{ matrix.arch }}"
+          FILE=$(jq -r ".artifacts[\"$KEY\"].file" "$MAN")
+          PIN=$(jq -r ".artifacts[\"$KEY\"].sha256" "$MAN")
+          BASE=$(jq -r .sourceTemplate "$MAN")
+          BASE="${BASE//\{version\}/$VERSION}"
+          curl -fL "$BASE$FILE" -o build-tractor.tar.gz
+          curl -fL "$BASE$(jq -r .checksumFile "$MAN")" -o build-tractor.sums
+          ACTUAL=$(shasum -a 256 build-tractor.tar.gz | awk '{print $1}')
+          SIDECAR=$(awk -v file="$FILE" '$2 == file {print $1}' build-tractor.sums)
+          [ "$ACTUAL" = "$PIN" ] && [ "$ACTUAL" = "$SIDECAR" ]
       - name: Build icon + launcher
         shell: bash
         run: |
@@ -170,7 +211,7 @@ jobs:
         run: |
           set -euo pipefail
           ORC_ICNS=dist/orc.icns ./packaging/stage-macos.sh \
-            engine.dmg ${{ matrix.arch }} ${{ needs.meta.outputs.version }} build/orc dist
+            engine.dmg build-tractor.tar.gz ${{ matrix.arch }} ${{ needs.meta.outputs.version }} build/orc dist
       - name: Smoke test the package
         shell: bash
         timeout-minutes: 5
@@ -212,20 +253,35 @@ jobs:
           set -euo pipefail
           FILE="${{ needs.meta.outputs.linux_x86_64_file }}"
           SHA="${{ needs.meta.outputs.linux_x86_64_sha }}"
-          BASE="https://dl.librewolf.net/librewolf/${{ needs.meta.outputs.engine_version }}"
-          curl -fL "$BASE/$FILE" -o engine.tar.xz
-          curl -fL "$BASE/$FILE.sha256sum" -o engine.tar.xz.sha256sum
+          BASE="${{ needs.meta.outputs.engine_source }}"
+          curl -fL "$BASE$FILE" -o engine.tar.xz
+          curl -fL "$BASE$FILE.sha256sum" -o engine.tar.xz.sha256sum
           ACTUAL="$(sha256sum engine.tar.xz | awk '{print $1}')"
           SIDECAR="$(awk '{print $1}' engine.tar.xz.sha256sum)"
           [ "$ACTUAL" = "$SHA" ] || { echo "sha256 mismatch vs manifest"; exit 1; }
           [ "$ACTUAL" = "$SIDECAR" ] || { echo "sha256 mismatch vs sidecar"; exit 1; }
           echo "verified $FILE $ACTUAL"
+      - name: Download + verify Tractor search service
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAN=installers/tractor-manifest.json
+          VERSION=$(jq -r .version "$MAN")
+          FILE=$(jq -r '.artifacts["linux-x86_64"].file' "$MAN")
+          PIN=$(jq -r '.artifacts["linux-x86_64"].sha256' "$MAN")
+          BASE=$(jq -r .sourceTemplate "$MAN")
+          BASE="${BASE//\{version\}/$VERSION}"
+          curl -fL "$BASE$FILE" -o tractor.tar.gz
+          curl -fL "$BASE$(jq -r .checksumFile "$MAN")" -o tractor.sums
+          ACTUAL=$(sha256sum tractor.tar.gz | awk '{print $1}')
+          SIDECAR=$(awk -v file="$FILE" '$2 == file {print $1}' tractor.sums)
+          [ "$ACTUAL" = "$PIN" ] && [ "$ACTUAL" = "$SIDECAR" ]
       - name: Build launcher + stage package
         shell: bash
         run: |
           set -euo pipefail
           ./packaging/build-launcher.sh linux build/orc
-          ./packaging/stage-linux.sh engine.tar.xz "${{ needs.meta.outputs.version }}" build/orc dist
+          ./packaging/stage-linux.sh engine.tar.xz tractor.tar.gz "${{ needs.meta.outputs.version }}" build/orc dist
       - name: Smoke test the package
         shell: bash
         timeout-minutes: 5
@@ -270,11 +326,11 @@ jobs:
           cat -- *.sha256sum > SHA256SUMS.txt
           VERSION="${{ needs.meta.outputs.version }}"
           cat > notes.md <<EOF
-          orc $VERSION - the Nightware Labz browser.
+          orc $VERSION
 
-          Wraparound build: a small native launcher + the unmodified
-          LibreWolf ${{ needs.meta.outputs.engine_version }} engine
-          (MPL-2.0), orc's policies, orc's profile seed, orc's face.
+          A pinned Gecko ${{ needs.meta.outputs.engine_version }} engine
+          (MPL-2.0), orc's native launcher, policies, profile seed, recursive
+          workspaces, and canonical icon.
 
           Packages are UNSIGNED for now: Windows SmartScreen and macOS
           Gatekeeper will warn - see the repo README for the honest

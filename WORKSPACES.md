@@ -1,12 +1,12 @@
 # Recursive workspaces
 
-Orc supplies a consistent Gecko engine for Blacksite and the systems inside
+orc supplies a consistent Gecko engine for Blacksite and the systems inside
 it. The launcher also supplies an explicit **workspace tree**: descend into
 a child context, run it with its own browser state, and select its parent
 again. This is useful when a recursive session needs an independent login,
 permissions, storage, or experiment history.
 
-The original default profile stays where it is. A child starts with Orc's
+The original default profile stays where it is. A child starts with orc's
 profile seed, not a copy of its parent's cookies, passwords, or tabs.
 
 ## Use the tree
@@ -35,9 +35,9 @@ invoke the installed `orc.exe`. The options are identical on every OS.
 Selectors apply left to right. `--orc-workspace` explicitly resets the
 path; `--orc-child` adds exactly one level; `--orc-parent` removes one
 level and stays at `/` if already there. The starting context is
-`ORC_WORKSPACE` when set, otherwise `/`. Orc exports the canonical name
+`ORC_WORKSPACE` when set, otherwise `/`. orc exports the canonical name
 and its computed `ORC_WORKSPACE_DEPTH` to the engine and its subprocesses.
-An unrelated terminal does not inherit environment changes from Orc;
+An unrelated terminal does not inherit environment changes from orc;
 pass `--orc-workspace` explicitly there.
 
 ```json
@@ -54,14 +54,14 @@ pass `--orc-workspace` explicitly there.
   absolute filesystem paths, backslashes, and Windows device names
   are rejected on every OS.
 - The full profile path must also fit the operating system's path limit;
-  Orc reports an error instead of truncating a long path.
+  orc reports an error instead of truncating a long path.
 - A branch's profile is under
   `<orc data directory>/workspaces/<name>/children/<name>/…/profile`.
   The `children` boundary ensures a descendant is never stored inside
   its ancestor's actual browser profile.
 - Engine profile selectors (`-profile`, `-P`, `-ProfileManager`, and
   `-CreateProfile`, including their long forms) are reserved. Use the
-  workspace options so all launches retain Orc's profile boundary.
+  workspace options so all launches retain orc's profile boundary.
 
 Named workspaces pass Gecko's `-no-remote` option, so a child launch
 cannot send its URL to an already running parent or another browser.
@@ -77,7 +77,7 @@ profiles separate browser state; they are not separate OS sandboxes.
 ## Web recursion
 
 A workspace continues to use Gecko's normal origin and permission rules.
-Blacksite can host its own browser/OS layers inside that context. Orc
+Blacksite can host its own browser/OS layers inside that context. orc
 does not strip CSP, COOP, COEP, `X-Frame-Options`, or certificate checks
 to make another layer load. Cross-origin isolation, SharedArrayBuffer,
 workers, and framing still depend on the document's headers and the

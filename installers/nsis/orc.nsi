@@ -22,7 +22,7 @@ Unicode true
 Name "orc"
 OutFile "${OUTFILE}"
 InstallDir "$LOCALAPPDATA\orc"
-InstallDirRegKey HKCU "Software\Nightware Labz\orc" "InstallDir"
+InstallDirRegKey HKCU "Software\orc" "InstallDir"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
 
@@ -40,16 +40,16 @@ SetCompressor /SOLID lzma
 
 VIProductVersion "${VERSION}.0"
 VIAddVersionKey "ProductName" "orc"
-VIAddVersionKey "FileDescription" "orc - ORC (Orchestration), the Nightware Labz browser"
-VIAddVersionKey "CompanyName" "Nightware Labz"
-VIAddVersionKey "LegalCopyright" "Browser wrap (c) Nightware Labz; engine (LibreWolf/Gecko) MPL-2.0"
+VIAddVersionKey "FileDescription" "orc"
+VIAddVersionKey "CompanyName" "orc"
+VIAddVersionKey "LegalCopyright" "(c) 2026 orc contributors; engine MPL-2.0"
 
 Section "orc" SEC_MAIN
   SetOutPath "$INSTDIR"
   File /r "${STAGE}\*.*"
 
-  WriteRegStr HKCU "Software\Nightware Labz\orc" "InstallDir" "$INSTDIR"
-  WriteRegStr HKCU "Software\Nightware Labz\orc" "Version" "${VERSION}"
+  WriteRegStr HKCU "Software\orc" "InstallDir" "$INSTDIR"
+  WriteRegStr HKCU "Software\orc" "Version" "${VERSION}"
 
   ; Start Menu shortcut, with the face.
   CreateDirectory "$SMPROGRAMS\orc"
@@ -58,7 +58,7 @@ Section "orc" SEC_MAIN
   ; Add/Remove Programs entry.
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\orc" "DisplayName" "orc"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\orc" "DisplayVersion" "${VERSION}"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\orc" "Publisher" "Nightware Labz"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\orc" "Publisher" "orc"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\orc" "DisplayIcon" "$INSTDIR\orc.ico"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\orc" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\orc" "UninstallString" '"$INSTDIR\uninstall.exe"'
@@ -75,8 +75,8 @@ Section "Uninstall"
   Delete "$SMPROGRAMS\orc\orc.lnk"
   RMDir "$SMPROGRAMS\orc"
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\orc"
-  DeleteRegKey HKCU "Software\Nightware Labz\orc"
-  ; The install tree goes. The profile (%APPDATA%\Nightware Labz\orc)
+  DeleteRegKey HKCU "Software\orc"
+  ; The install tree goes. The profile (%APPDATA%\orc)
   ; is the user's own data - it stays unless they delete it by hand.
   RMDir /r "$INSTDIR"
 SectionEnd

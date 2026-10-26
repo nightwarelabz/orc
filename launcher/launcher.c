@@ -1,5 +1,5 @@
 /* orc — native launcher and recursive workspace boundary.
- * The bundled Gecko engine owns rendering and web security. Orc owns
+ * The bundled Gecko engine owns rendering and web security. orc owns
  * workspace identity, profile selection, first-run seeding and argv.
  * No shell, profile copying, or changes to another browser's profile. */
 #ifndef _WIN32
@@ -28,6 +28,12 @@
 #ifndef SEED_REL
 #error "SEED_REL must be the seed user.js path relative to the launcher"
 #endif
+#ifndef SEED_CHROME_REL
+#define SEED_CHROME_REL ""
+#endif
+#ifndef TRACTOR_REL
+#define TRACTOR_REL ""
+#endif
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -43,6 +49,9 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <limits.h>
+#include <signal.h>
+#include <time.h>
+#include <sys/wait.h>
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
 #endif
@@ -69,6 +78,51 @@ static int path_append(OrcChar *out, const OrcChar *value) {
     memcpy(out + a, value, (b + 1) * sizeof(OrcChar));
     return 0;
 }
+
+static int path_append_ascii(OrcChar *out, const char *value) {
+    OrcChar converted[ORC_PATH_CAP];
+    size_t i;
+    if (strlen(value) >= ORC_PATH_CAP) return -1;
+    for (i = 0; value[i]; i++) converted[i] = (OrcChar)value[i];
+    converted[i] = 0;
+    return path_append(out, converted);
+}
+
+#ifdef _WIN32
+static int windows_directory_exists(const OrcChar *path) {
+    DWORD attr = GetFileAttributesW(path);
+    return attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+static int windows_profile_roots(OrcChar *current, OrcChar *legacy) {
+    const OrcChar *home = orc_getenv(ORC_TEXT("APPDATA"));
+    if (home && *home) {
+        if (path_copy(current, home) || path_copy(legacy, home)) return -1;
+    } else {
+        home = orc_getenv(ORC_TEXT("USERPROFILE"));
+        if (!home || !*home || path_copy(current, home) ||
+            path_copy(legacy, home) ||
+            path_append(current, ORC_TEXT("AppData\\Roaming")) ||
+            path_append(legacy, ORC_TEXT("AppData\\Roaming"))) return -1;
+    }
+    if (path_append(current, ORC_TEXT("orc")) ||
+        path_append(legacy, ORC_TEXT("Nightware Labz")) ||
+        path_append(legacy, ORC_TEXT("orc"))) return -1;
+    return 0;
+}
+
+/* Move the former per-user profile root once. If both roots already exist,
+ * leave both intact and keep using the old root so no profile is overwritten. */
+static int migrate_windows_profile_root(void) {
+    OrcChar current[ORC_PATH_CAP], legacy[ORC_PATH_CAP];
+    if (windows_profile_roots(current, legacy)) return -1;
+    if (!windows_directory_exists(legacy) || windows_directory_exists(current))
+        return 0;
+    if (MoveFileExW(legacy, current, MOVEFILE_COPY_ALLOWED | MOVEFILE_WRITE_THROUGH))
+        return 0;
+    return windows_directory_exists(current) ? 0 : -1;
+}
+#endif
 
 static int append_ascii(OrcChar *out, const char *value) {
     OrcChar native[ORC_MAX_WORKSPACE];
@@ -236,17 +290,15 @@ static int seed_profile(const OrcChar *seed, const OrcChar *target) {
 }
 
 static int profile_path(OrcChar *profile, const OrcWorkspace *ws) {
+#ifndef _WIN32
     const OrcChar *home;
+#endif
 #ifdef _WIN32
-    home = orc_getenv(ORC_TEXT("APPDATA"));
-    if (home && *home) {
-        if (path_copy(profile, home)) return -1;
-    } else {
-        home = orc_getenv(ORC_TEXT("USERPROFILE"));
-        if (!home || !*home || path_copy(profile, home) ||
-            path_append(profile, ORC_TEXT("AppData\\Roaming"))) return -1;
-    }
-    if (path_append(profile, ORC_TEXT("Nightware Labz\\orc"))) return -1;
+    OrcChar current[ORC_PATH_CAP], legacy[ORC_PATH_CAP];
+    if (windows_profile_roots(current, legacy)) return -1;
+    if (windows_directory_exists(legacy)) {
+        if (path_copy(profile, legacy)) return -1;
+    } else if (path_copy(profile, current)) return -1;
 #elif defined(__APPLE__)
     home = getenv("HOME");
     if (!home || home[0] != '/' || path_copy(profile, home) ||
@@ -276,6 +328,120 @@ static int profile_path(OrcChar *profile, const OrcWorkspace *ws) {
         }
     }
     return path_append(profile, ORC_TEXT("profile"));
+}
+
+static int process_alive(unsigned long pid) {
+    if (!pid) return 0;
+#ifdef _WIN32
+    HANDLE process = OpenProcess(SYNCHRONIZE, FALSE, (DWORD)pid);
+    if (!process) return 0;
+    DWORD state = WaitForSingleObject(process, 0);
+    CloseHandle(process);
+    return state == WAIT_TIMEOUT;
+#else
+    return kill((pid_t)pid, 0) == 0 || errno == EPERM;
+#endif
+}
+
+static int search_service_ready(const OrcChar *pid_file) {
+#ifdef _WIN32
+    FILE *file = _wfopen(pid_file, L"r");
+#else
+    FILE *file = fopen(pid_file, "r");
+#endif
+    if (!file) return 0;
+    unsigned long pid = 0;
+    int read_ok = fscanf(file, "%lu", &pid) == 1;
+    fclose(file);
+    return read_ok && process_alive(pid);
+}
+
+/* Start the local Tractor search endpoint before Gecko. The global Orc
+ * profile owns the service so every workspace shares the same local port.
+ * Its parent PID remains the launcher PID (exec on Unix, wait on Windows). */
+static int launch_search_service(const OrcChar *dir) {
+    if (!TRACTOR_REL[0]) return 0; /* launcher-only fixture builds */
+    OrcChar service[ORC_PATH_CAP], data_dir[ORC_PATH_CAP], pid_file[ORC_PATH_CAP];
+    OrcWorkspace root = {0};
+    if (path_copy(service, dir) || path_append_ascii(service, TRACTOR_REL) ||
+        path_copy(data_dir, dir) || profile_path(data_dir, &root) ||
+        path_append(data_dir, ORC_TEXT("tractor-data")) || make_dirs(data_dir) ||
+        path_copy(pid_file, data_dir) || path_append(pid_file, ORC_TEXT("search-service.pid"))) {
+        fprintf(stderr, "orc: could not prepare Tractor's local search service\n");
+        return -1;
+    }
+    if (!regular_file(service)) {
+        fprintf(stderr, "orc: Tractor's local search engine is missing; reinstall orc\n");
+        return -1;
+    }
+#ifdef _WIN32
+    OrcChar pid[32], *args[6];
+    _snwprintf(pid, 32, L"%lu", (unsigned long)GetCurrentProcessId());
+    args[0] = service;
+    args[1] = L"--serve";
+    args[2] = L"--data-dir";
+    args[3] = data_dir;
+    args[4] = L"--parent-pid";
+    args[5] = pid;
+    wchar_t *command = (wchar_t *)calloc(32767, sizeof(wchar_t));
+    if (!command) return -1;
+    for (int i = 0; i < 6; i++) {
+        if (orc_command_arg(command, 32767, args[i])) {
+            free(command);
+            return -1;
+        }
+    }
+    STARTUPINFOW si = {0};
+    PROCESS_INFORMATION pi = {0};
+    si.cb = sizeof(si);
+    BOOL started = CreateProcessW(service, command, NULL, NULL, FALSE,
+                                  CREATE_NO_WINDOW, NULL, dir, &si, &pi);
+    DWORD error = started ? 0 : GetLastError();
+    free(command);
+    if (!started) {
+        fprintf(stderr, "orc: could not start Tractor's search engine (Windows error %lu)\n", error);
+        return -1;
+    }
+    CloseHandle(pi.hThread);
+#else
+    char pid[32];
+    snprintf(pid, sizeof(pid), "%lu", (unsigned long)getpid());
+    char *args[] = {(char *)service, "--serve", "--data-dir", (char *)data_dir,
+                    "--parent-pid", pid, NULL};
+    pid_t child = fork();
+    if (child < 0) {
+        fprintf(stderr, "orc: could not start Tractor's search engine: %s\n", strerror(errno));
+        return -1;
+    }
+    if (child == 0) {
+        execv(service, args);
+        _exit(127);
+    }
+#endif
+    int ready = 0;
+    for (int attempt = 0; attempt < 100; attempt++) {
+        if (search_service_ready(pid_file)) {
+            ready = 1;
+            break;
+        }
+#ifdef _WIN32
+        if (WaitForSingleObject(pi.hProcess, 0) == WAIT_OBJECT_0) break;
+        Sleep(50);
+#else
+        int status = 0;
+        if (waitpid(child, &status, WNOHANG) == child) break;
+        struct timespec delay = {0, 50000000};
+        nanosleep(&delay, NULL);
+#endif
+    }
+#ifdef _WIN32
+    CloseHandle(pi.hProcess);
+#endif
+    if (!ready) {
+        fprintf(stderr, "orc: Tractor's local search service did not become ready\n");
+        return -1;
+    }
+    return 0;
 }
 
 static void json_string(const char *value) {
@@ -364,6 +530,7 @@ static int launch_engine(const OrcChar *engine, const OrcChar *dir,
         return -1;
     }
     CloseHandle(pi.hThread);
+    WaitForSingleObject(pi.hProcess, INFINITE);
     CloseHandle(pi.hProcess);
     return 0;
 #else
@@ -393,12 +560,23 @@ int orc_main(int argc, OrcChar **argv) {
         return 0;
     }
     OrcChar profile[ORC_PATH_CAP];
+    if (ws.info) {
+        if (profile_path(profile, &ws)) {
+            fprintf(stderr, "orc: cannot resolve workspace profile (missing home or path too long)\n");
+            return 1;
+        }
+        return print_info(&ws, profile) ? 1 : 0;
+    }
+#ifdef _WIN32
+    if (migrate_windows_profile_root()) {
+        fprintf(stderr, "orc: could not migrate the existing profile folder safely\n");
+        return 1;
+    }
+#endif
     if (profile_path(profile, &ws)) {
         fprintf(stderr, "orc: cannot resolve workspace profile (missing home or path too long)\n");
         return 1;
     }
-    if (ws.info) return print_info(&ws, profile) ? 1 : 0;
-
     OrcChar dir[ORC_PATH_CAP], engine[ORC_PATH_CAP], seed[ORC_PATH_CAP], userjs[ORC_PATH_CAP];
     if (self_dir(dir) || path_copy(engine, dir) || path_copy(seed, dir)) goto path_error;
     /* Compile-time relative paths contain ASCII only. */
@@ -428,10 +606,22 @@ int orc_main(int argc, OrcChar **argv) {
         fprintf(stderr, "orc: could not seed workspace profile; check the installation and permissions\n");
         return 1;
     }
+    if (SEED_CHROME_REL[0]) {
+        OrcChar chrome_seed[ORC_PATH_CAP], chrome_dir[ORC_PATH_CAP], chrome_css[ORC_PATH_CAP];
+        if (path_copy(chrome_seed, dir) || path_append_ascii(chrome_seed, SEED_CHROME_REL) ||
+            path_copy(chrome_dir, profile) || path_append(chrome_dir, ORC_TEXT("chrome")) ||
+            make_dirs(chrome_dir) || path_copy(chrome_css, chrome_dir) ||
+            path_append(chrome_css, ORC_TEXT("userChrome.css")) ||
+            seed_profile(chrome_seed, chrome_css)) {
+            fprintf(stderr, "orc: could not seed the default workspace theme; check the installation and permissions\n");
+            return 1;
+        }
+    }
     if (export_workspace(&ws)) {
         fprintf(stderr, "orc: could not export workspace context\n");
         return 1;
     }
+    if (launch_search_service(dir)) return 1;
     return launch_engine(engine, dir, profile, argc, argv, &ws) ? 1 : 0;
 path_error:
     fprintf(stderr, "orc: could not resolve installation path (invalid or too long)\n");

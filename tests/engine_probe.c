@@ -1,17 +1,21 @@
 /* Test engine: report the exact argv/environment received from the launcher. */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <wchar.h>
 #define probe_main wmain
 #define probe_env _wgetenv
 #define P(s) L##s
+#define probe_equal(a, b) (wcscmp((a), (b)) == 0)
 typedef wchar_t ProbeChar;
 #else
 #define probe_main main
 #define probe_env getenv
 #define P(s) s
+#define probe_equal(a, b) (strcmp((a), (b)) == 0)
 typedef char ProbeChar;
 #endif
 
@@ -47,7 +51,16 @@ int probe_main(int argc, ProbeChar **argv) {
         if (i) fputc(',', out);
         string(out, argv[i]);
     }
-    fprintf(out, "],\"workspace\":");
+    fprintf(out, "],\"profile\":");
+    const ProbeChar *profile = P("");
+    for (int i = 1; i + 1 < argc; i++) {
+        if (probe_equal(argv[i], P("-profile"))) {
+            profile = argv[i + 1];
+            break;
+        }
+    }
+    string(out, profile);
+    fprintf(out, ",\"workspace\":");
     const ProbeChar *name = probe_env(P("ORC_WORKSPACE"));
     string(out, name ? name : P(""));
     fprintf(out, ",\"depth\":");

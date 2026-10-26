@@ -1,57 +1,46 @@
-# orc wraparound installers
+# orc installers
 
-One job per OS: lay down the pinned engine + orc's distribution layer,
-register orc with its own profile, get out of the way.
+Each platform package installs the pinned Gecko engine and Tractor search
+service with orc's launcher, policies, profile seed, lowercase product name,
+and canonical icon.
 
-| OS      | Form                             | Engine source (pinned)        | Profile folder |
-|---------|----------------------------------|-------------------------------|----------------|
-| Windows | NSIS installer (.exe) + portable zip | LibreWolf windows portable zip | `%APPDATA%\Nightware Labz\orc\profile` |
-| macOS   | .zip holding `orc.app`           | LibreWolf macOS .dmg          | `~/Library/Application Support/orc/profile` |
-| Linux   | tarball + `install.sh`           | LibreWolf linux package tar.xz | `$XDG_DATA_HOME/orc/profile`, else `~/.local/share/orc/profile` |
+| OS | Output | Profile |
+|---|---|---|
+| Windows | NSIS setup executable and portable zip | `%APPDATA%\orc\profile` |
+| macOS | zip containing `orc.app` | `~/Library/Application Support/orc/profile` |
+| Linux | tarball containing `install.sh` | `$XDG_DATA_HOME/orc/profile`, otherwise `~/.local/share/orc/profile` |
 
-Rules:
-- Engine binaries are **unmodified** upstream builds (LibreWolf
-  158.0.1-2, MPL-2.0), pinned in `engine-manifest.json` with SHA-256
-  per artifact. Every build verifies twice — against the manifest and
-  against the official `.sha256sum` sidecar at dl.librewolf.net — and a
-  mismatch on either stops the build.
-- The wrap (launcher, `../launcher/launcher.c`) does exactly three
-  things: ensure orc's profile folder exists, seed `profile/user.js`
-  into it the first time only, and exec the engine with
-  `-profile <orc profile>` plus the user's arguments.
-- `distribution/policies.json` rides **inside** the engine folder
-  (`engine/distribution/` on Windows/Linux;
-  `LibreWolf.app/Contents/Resources/distribution/` inside the nested
-  app on macOS) — that is where Gecko reads it from.
-- Uninstall removes the program and leaves the profile alone: their
-  history is theirs. (Windows: the NSIS uninstaller says so in its
-  script; macOS/Linux: delete the app/tree — the profile is elsewhere.)
+## Invariants
 
-## Per-OS packaging
+- Every engine artifact is verified against both the SHA-256 pinned in
+  `engine-manifest.json` and its publisher sidecar.
+- Every Tractor archive is verified against the SHA-256 pinned in
+  `tractor-manifest.json` and its release checksum list.
+- The native launcher always selects orc's own profile and seeds
+  `profile/user.js` and `chrome/userChrome.css` only when each file does not
+  already exist. This sets up the dark green browser chrome without replacing
+  a user's profile styling.
+- `distribution/distribution.ini` enables profile chrome styling by default;
+  the orc dark green colors apply to browser controls and tabs, not websites.
+- User-visible strings are rewritten to `orc` and audited before packaging.
+- Browser artwork, executables, app bundles, installers, uninstallers,
+  shortcuts, desktop files, and taskbar/dock surfaces use the assets in
+  `../branding/`.
+- The updater inside the engine stays disabled; releases are controlled by
+  orc's verified package pipeline.
 
-- **Windows** — `../packaging/stage-windows.ps1` downloads + verifies
-  the portable zip itself, stages `orc.exe` (launcher, built by
-  `../packaging/build-launcher.ps1` with the face as its icon) beside
-  `engine/`, and zips a portable build. `nsis/orc.nsi` then wraps the
-  staged tree into the per-user setup .exe (Start Menu shortcut,
-  optional desktop shortcut, Add/Remove Programs entry).
-- **macOS** — `../packaging/stage-macos.sh` mounts the pinned .dmg and
-  nests the untouched `LibreWolf.app` inside `orc.app` under
-  `Contents/Resources/engine/`, with the launcher as
-  `Contents/MacOS/orc`, the icon as `Contents/Resources/orc.icns`
-  (CI builds it from `../branding/orc.iconset` with iconutil), the
-  profile seed under `Contents/Resources/profile-seed/`, and
-  `Info.plist` rendered from `../packaging/Info.plist.tmpl`
-  (bundle id `net.nosuchmachine.orc`).
-- **Linux** — `../packaging/stage-linux.sh` stages the launcher as
-  `orc` beside `engine/`, icons, `orc.desktop`, and `install.sh`,
-  which installs per-user into `~/.local/share/orc` with a
-  `~/.local/bin/orc` symlink and a desktop entry. No root, no package
-  manager.
+## Platform layout
 
-## Unsigned, for now
+- **Windows:** the portable engine is staged under `engine/`; `orc.exe`
+  launches it. The bundled `tractor/` tree supplies the local search service.
+  Both executable resources and the NSIS UI use `orc.ico`.
+- **macOS:** the engine app is nested inside `orc.app`. The outer and nested
+  bundle plists use the name `orc`, and both bundles receive `orc.icns`
+  before the inside-out ad-hoc seal. Tractor is nested in the outer app's
+  Resources folder.
+- **Linux:** the package contains `orc`, `engine/`, the full PNG icon
+  ladder, `tractor/`, `orc.desktop`, and `install.sh`. Installation registers every
+  icon size in the user's hicolor theme.
 
-v1 ships unsigned: Windows SmartScreen and macOS Gatekeeper warn on
-first run (README.md in the repo root has the exact steps). Signing +
-notarization come when there are certificates to sign with; nothing
-about the packages pretends otherwise.
+The release workflow builds all packages and publishes a top-level
+`SHA256SUMS.txt` for tagged releases.

@@ -51,7 +51,7 @@ class LauncherTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(prefix="orc-test-")
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        self.install = self.root / "Orc install ü"
+        self.install = self.root / "orc install ü"
         self.install.mkdir()
         self.launcher = self.install / self.binary.name
         shutil.copy2(self.binary, self.launcher)
@@ -70,7 +70,7 @@ class LauncherTests(unittest.TestCase):
         self.env.update(HOME=str(self.home), USERPROFILE=str(self.home),
                         APPDATA=str(self.home / "Roaming"), ORC_TEST_CAPTURE=str(self.capture))
         if WINDOWS:
-            self.data = self.home / "Roaming/Nightware Labz/orc"
+            self.data = self.home / "Roaming/orc"
         elif MACOS:
             self.data = self.home / "Library/Application Support/orc"
         else:
@@ -259,6 +259,23 @@ class LauncherTests(unittest.TestCase):
             args += ["\\" * count, "before" + "\\" * count + '"after',
                      "spaces then " + "\\" * count]
         self.assertEqual(self.launch(*args)["argv"][3:], args)
+
+    @unittest.skipUnless(WINDOWS, "Windows profile migration")
+    def test_legacy_windows_profile_root_moves_without_losing_data(self):
+        legacy = self.home / "Roaming/Nightware Labz/orc"
+        marker = legacy / "profile/keep-me.txt"
+        marker.parent.mkdir(parents=True)
+        marker.write_text("existing profile data", encoding="utf-8")
+
+        info = self.info()
+        self.assertEqual(info["profile"], str(legacy / "profile"))
+        self.assertTrue(marker.is_file())
+
+        launched = self.launch()
+        self.assertEqual(launched["profile"], str(self.data / "profile"))
+        self.assertEqual((self.data / "profile/keep-me.txt").read_text(
+            encoding="utf-8"), "existing profile data")
+        self.assertFalse(legacy.exists())
 
     @unittest.skipIf(WINDOWS or MACOS, "XDG is Linux-specific")
     def test_xdg_home_is_respected_and_relative_values_are_ignored(self):

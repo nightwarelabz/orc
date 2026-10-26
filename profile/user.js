@@ -1,8 +1,8 @@
-// orc — user.js  (LibreWolf-style hardening, orc defaults)
-// Seeded by the wraparound launcher into orc's own profile folder on
+// orc — hardened defaults
+// Seeded by the launcher into orc's own profile folder on
 // first run only; the launcher never overwrites it afterwards.
-// orc's profile is separate from Firefox/LibreWolf:
-//   Windows: %APPDATA%\Nightware Labz\orc\profile
+// orc's profile is separate from every other browser:
+//   Windows: %APPDATA%\orc\profile
 //   macOS:   ~/Library/Application Support/orc/profile
 //   Linux:   $XDG_DATA_HOME/orc/profile, else ~/.local/share/orc/profile
 // Users can override anything below with user-overrides.js in the profile.
@@ -23,7 +23,7 @@ user_pref("browser.discovery.enabled", false);
 user_pref("extensions.getAddons.cache.enabled", false);
 user_pref("extensions.getAddons.showPane", false);
 
-// --- tracking / fingerprinting (LibreWolf posture) ---
+// --- tracking / fingerprinting ---
 user_pref("privacy.trackingprotection.enabled", true);
 user_pref("privacy.trackingprotection.socialtracking.enabled", true);
 user_pref("privacy.trackingprotection.cryptomining.enabled", true);
@@ -37,20 +37,10 @@ user_pref("privacy.resistFingerprinting", false); // Deliberate (Chase's full-fu
                                                   // timezone and timers in ways that break real
                                                   // sites. Tracking protection + Total Cookie
                                                   // Protection stay strict; flip RFP on in
-                                                  // Settings if you want LibreWolf's posture.
+                                                  // Settings if you want the harder posture.
 user_pref("webgl.disabled", false);
-user_pref("librewolf.webgl.prompt", false); // LibreWolf 158 also gates WebGL
-                                             // behind a per-site permission prompt
-                                             // (small address-bar icon, temporary
-                                             // grant): contexts are blocked until
-                                             // granted, so pages report WebGL
-                                             // "not available" even with the line
-                                             // above false. Full functionality
-                                             // means no gate. The stagers force the
-                                             // same pref in the engine autoconfig
-                                             // (packaging/orc-autoconfig.cfg) so
-                                             // existing profiles heal too; this
-                                             // seed covers fresh profiles.
+// The engine-level autoconfig removes its additional per-site WebGL prompt
+// for new and existing profiles (packaging/orc-autoconfig.cfg).
 
 // --- https / safe browsing posture ---
 user_pref("security.https_only_mode", true);
@@ -59,7 +49,7 @@ user_pref("network.stricttransportsecurity.preloadlist", true);
 user_pref("security.cert_pinning.enforcement_level", 2);
 
 // --- search: private by default, never sponsored ---
-user_pref("browser.search.defaultenginename", "DuckDuckGo");
+user_pref("browser.search.defaultenginename", "Tractor");
 user_pref("browser.search.suggest.enabled", false);
 user_pref("browser.urlbar.suggest.searches", false);
 user_pref("browser.newtabpage.activity-stream.showSponsored", false);
@@ -73,8 +63,8 @@ user_pref("browser.promo.focus.enabled", false);
 user_pref("identity.fxaccounts.enabled", false); // no account wall; enable manually if wanted
 
 // --- media: everything plays ---
-// Widevine/EME ships OFF in LibreWolf by default, which silently
-// breaks Netflix/Spotify-class sites. Full functionality means on.
+// The pinned engine defaults EME off, which silently breaks
+// Netflix/Spotify-class sites. Full functionality means on.
 // The CDM is a proprietary Google blob fetched on first use — that
 // trade is stated in SECURITY.md, not hidden.
 user_pref("media.eme.enabled", true);

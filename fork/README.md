@@ -1,22 +1,24 @@
-# orc — v2 true source fork (scaffold)
+# orc — direct Gecko source-build scaffold
 
-Road: LibreWolf's own build system (codeberg.org/librewolf/source).
+This directory records the path from the current pinned-engine distribution to
+a complete source build.
 
-```
-git clone https://codeberg.org/librewolf/source.git
-cd source
-./fetch.sh        # pulls the pinned Firefox source tree
-./patch.sh        # applies the LibreWolf patch set
-# add orc on top:
-#   - copy branding/orc into firefox-source/browser/branding/orc
-#   - our extra patches go in assets/ alongside LibreWolf's, applied last
-cd firefox-source
-MOZCONFIG=../fork/mozconfig ./mach build
-./mach package
-```
+The future build should:
 
-Reality, from LibreWolf's build docs: 2–4 h per platform build, ≥8 GB RAM,
-~30 GB disk. This belongs in CI (one runner per OS), never on a laptop as
-the release path. Windows installers need code signing and macOS needs
-notarization before strangers can install without warnings — budget for
-both before announcing downloads.
+1. fetch a pinned Mozilla Gecko source revision;
+2. apply orc's policy and functionality patches;
+3. copy the canonical assets into `browser/branding/orc`;
+4. build with `fork/mozconfig`;
+5. publish source and binary checksums with each release; and
+6. run the same branding and recursive-workspace audits as the current
+   packages.
+
+The source build is deliberately not the v1 release gate. A browser build
+requires substantial storage, memory, runner time, platform-specific signing,
+and reproducible patch management. The current distribution proves the
+launcher, policy, workspace, and branding contracts while that infrastructure
+is prepared.
+
+The name and icon rules do not change between architectures: the displayed
+product is always lowercase `orc`, and every supported visual surface uses
+the pixel orc face from `../branding/`.

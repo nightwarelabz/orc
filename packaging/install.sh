@@ -10,18 +10,19 @@ set -eu
 SRC="$(cd "$(dirname "$0")" && pwd)"
 DEST="$HOME/.local/share/orc"
 
-mkdir -p "$DEST" "$HOME/.local/bin" "$HOME/.local/share/applications" \
-         "$HOME/.local/share/icons/hicolor/256x256/apps"
+mkdir -p "$DEST" "$HOME/.local/bin" "$HOME/.local/share/applications"
 cp -r "$SRC/." "$DEST/"
 chmod +x "$DEST/orc" "$DEST/engine/orc" "$DEST/engine/orc-bin" 2>/dev/null || chmod +x "$DEST/orc"
 ln -sf "$DEST/orc" "$HOME/.local/bin/orc"
 
-# Desktop entry with absolute paths, so launchers find orc even when
-# ~/.local/bin is not on PATH.
+# Desktop entry with an absolute executable path and the canonical themed icon.
 sed -e "s|^Exec=.*|Exec=$DEST/orc %u|" \
-    -e "s|^Icon=.*|Icon=$DEST/icons/orc-256.png|" \
     "$SRC/orc.desktop" > "$HOME/.local/share/applications/orc.desktop"
-cp "$SRC/icons/orc-256.png" "$HOME/.local/share/icons/hicolor/256x256/apps/orc.png"
+for size in 16 32 64 128 256 512; do
+  icon_dir="$HOME/.local/share/icons/hicolor/${size}x${size}/apps"
+  mkdir -p "$icon_dir"
+  cp "$SRC/icons/orc-${size}.png" "$icon_dir/orc.png"
+done
 
 command -v update-desktop-database >/dev/null 2>&1 && \
   update-desktop-database "$HOME/.local/share/applications" >/dev/null 2>&1 || true
