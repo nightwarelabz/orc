@@ -49,7 +49,7 @@ user_pref("network.stricttransportsecurity.preloadlist", true);
 user_pref("security.cert_pinning.enforcement_level", 2);
 
 // --- search: private by default, never sponsored ---
-user_pref("browser.search.defaultenginename", "DuckDuckGo");
+user_pref("browser.search.defaultenginename", "Tractor");
 user_pref("browser.search.suggest.enabled", false);
 user_pref("browser.urlbar.suggest.searches", false);
 user_pref("browser.newtabpage.activity-stream.showSponsored", false);

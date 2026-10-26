@@ -64,7 +64,14 @@
       }
     },
     "SearchEngines": {
-      "Default": "DuckDuckGo",
+      "Default": "Tractor",
+      "Add": [
+        {
+          "Name": "Tractor",
+          "URLTemplate": "http://127.0.0.1:45873/search?q={searchTerms}",
+          "IconURL": "http://127.0.0.1:45873/assets/icon.svg"
+        }
+      ],
       "PreventInstalls": false,
       "Remove": [
         "Google",

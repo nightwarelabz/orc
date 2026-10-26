@@ -85,6 +85,21 @@ jobs:
       - name: Build launcher
         shell: pwsh
         run: ./packaging/build-launcher.ps1 -Out build/orc.exe -Icon branding/orc.ico
+      - name: Download and verify Tractor search service
+        shell: pwsh
+        run: |
+          $manifest = Get-Content installers\tractor-manifest.json -Raw | ConvertFrom-Json
+          $artifact = $manifest.artifacts.'windows-x86_64'
+          $base = $manifest.sourceTemplate.Replace('{version}', $manifest.version)
+          $archive = Join-Path $PWD 'build\tractor.zip'
+          New-Item -ItemType Directory -Force (Split-Path $archive) | Out-Null
+          Invoke-WebRequest -Uri "$base$($artifact.file)" -OutFile $archive
+          Invoke-WebRequest -Uri "$base$($manifest.checksumFile)" -OutFile "$archive.sums"
+          $actual = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
+          $entry = Get-Content "$archive.sums" | Where-Object { ($_ -split '\s+', 2)[1] -eq $artifact.file } | Select-Object -First 1
+          if (-not $entry) { throw 'Tractor archive is missing from SHA256SUMS.txt' }
+          $sidecar = ($entry -split '\s+', 2)[0].ToLowerInvariant()
+          if ($actual -ne $artifact.sha256 -or $actual -ne $sidecar) { throw "Tractor SHA-256 mismatch: got $actual" }
       - name: Stage package (downloads + verifies the engine itself)
         shell: pwsh
         run: >
@@ -93,6 +108,7 @@ jobs:
           -Version ${{ needs.meta.outputs.version }}
           -OrcExe build/orc.exe
           -OutDir dist
+          -TractorZip build\tractor.zip
       - name: Build NSIS installer
         shell: pwsh
         run: |
@@ -167,6 +183,22 @@ jobs:
           [ "$ACTUAL" = "$SHA" ] || { echo "sha256 mismatch vs manifest"; exit 1; }
           [ "$ACTUAL" = "$SIDECAR" ] || { echo "sha256 mismatch vs sidecar"; exit 1; }
           echo "verified $FILE $ACTUAL"
+      - name: Download + verify Tractor search service
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAN=installers/tractor-manifest.json
+          VERSION=$(jq -r .version "$MAN")
+          KEY="macos-${{ matrix.arch }}"
+          FILE=$(jq -r ".artifacts[\"$KEY\"].file" "$MAN")
+          PIN=$(jq -r ".artifacts[\"$KEY\"].sha256" "$MAN")
+          BASE=$(jq -r .sourceTemplate "$MAN")
+          BASE="${BASE//\{version\}/$VERSION}"
+          curl -fL "$BASE$FILE" -o build-tractor.tar.gz
+          curl -fL "$BASE$(jq -r .checksumFile "$MAN")" -o build-tractor.sums
+          ACTUAL=$(shasum -a 256 build-tractor.tar.gz | awk '{print $1}')
+          SIDECAR=$(awk -v file="$FILE" '$2 == file {print $1}' build-tractor.sums)
+          [ "$ACTUAL" = "$PIN" ] && [ "$ACTUAL" = "$SIDECAR" ]
       - name: Build icon + launcher
         shell: bash
         run: |
@@ -179,7 +211,7 @@ jobs:
         run: |
           set -euo pipefail
           ORC_ICNS=dist/orc.icns ./packaging/stage-macos.sh \
-            engine.dmg ${{ matrix.arch }} ${{ needs.meta.outputs.version }} build/orc dist
+            engine.dmg build-tractor.tar.gz ${{ matrix.arch }} ${{ needs.meta.outputs.version }} build/orc dist
       - name: Smoke test the package
         shell: bash
         timeout-minutes: 5
@@ -229,12 +261,27 @@ jobs:
           [ "$ACTUAL" = "$SHA" ] || { echo "sha256 mismatch vs manifest"; exit 1; }
           [ "$ACTUAL" = "$SIDECAR" ] || { echo "sha256 mismatch vs sidecar"; exit 1; }
           echo "verified $FILE $ACTUAL"
+      - name: Download + verify Tractor search service
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAN=installers/tractor-manifest.json
+          VERSION=$(jq -r .version "$MAN")
+          FILE=$(jq -r '.artifacts["linux-x86_64"].file' "$MAN")
+          PIN=$(jq -r '.artifacts["linux-x86_64"].sha256' "$MAN")
+          BASE=$(jq -r .sourceTemplate "$MAN")
+          BASE="${BASE//\{version\}/$VERSION}"
+          curl -fL "$BASE$FILE" -o tractor.tar.gz
+          curl -fL "$BASE$(jq -r .checksumFile "$MAN")" -o tractor.sums
+          ACTUAL=$(sha256sum tractor.tar.gz | awk '{print $1}')
+          SIDECAR=$(awk -v file="$FILE" '$2 == file {print $1}' tractor.sums)
+          [ "$ACTUAL" = "$PIN" ] && [ "$ACTUAL" = "$SIDECAR" ]
       - name: Build launcher + stage package
         shell: bash
         run: |
           set -euo pipefail
           ./packaging/build-launcher.sh linux build/orc
-          ./packaging/stage-linux.sh engine.tar.xz "${{ needs.meta.outputs.version }}" build/orc dist
+          ./packaging/stage-linux.sh engine.tar.xz tractor.tar.gz "${{ needs.meta.outputs.version }}" build/orc dist
       - name: Smoke test the package
         shell: bash
         timeout-minutes: 5

@@ -12,12 +12,14 @@ param(
     [Parameter(Mandatory = $true)][ValidateSet('x86_64', 'arm64')][string]$Arch,
     [Parameter(Mandatory = $true)][string]$Version,
     [Parameter(Mandatory = $true)][string]$OrcExe,
+    [Parameter(Mandatory = $true)][string]$TractorZip,
     [string]$OutDir = 'dist'
 )
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
 
 if (-not (Test-Path $OrcExe)) { throw "launcher not found: $OrcExe (build it first with packaging/build-launcher.ps1)" }
+if (-not (Test-Path $TractorZip)) { throw "Tractor bundle not found: $TractorZip" }
 
 $manifest = Get-Content (Join-Path $Root 'installers\engine-manifest.json') -Raw | ConvertFrom-Json
 $key = "windows-$Arch"
@@ -65,6 +67,16 @@ New-Item -ItemType Directory -Force $stage | Out-Null
 Copy-Item $OrcExe (Join-Path $stage 'orc.exe')
 Copy-Item (Join-Path $Root 'branding\orc.ico') (Join-Path $stage 'orc.ico')
 Copy-Item -Recurse $engineDir (Join-Path $stage 'engine')
+
+# Tractor supplies Orc's default recursive web and image search service.
+$tractorExtract = Join-Path $work 'tractor-extract'
+New-Item -ItemType Directory -Force $tractorExtract | Out-Null
+Expand-Archive -Path $TractorZip -DestinationPath $tractorExtract -Force
+$tractorExe = Get-ChildItem -Path $tractorExtract -Filter 'Tractor.exe' -Recurse -File | Select-Object -First 1
+if (-not $tractorExe) { throw 'Tractor executable not found in its native bundle' }
+$tractorDir = Join-Path $stage 'tractor'
+New-Item -ItemType Directory -Force $tractorDir | Out-Null
+Copy-Item -Recurse $tractorExe.Directory.FullName (Join-Path $tractorDir 'Tractor')
 
 # Full orc branding: the engine executable takes orc's name and its
 # version resources follow (rcedit, pinned + hash-verified), and

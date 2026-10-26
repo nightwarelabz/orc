@@ -7,25 +7,28 @@
 #
 #   orc.app/Contents/MacOS/orc                              (launcher)
 #   orc.app/Contents/Resources/engine/orc.app               (engine, rebranded)
+#   orc.app/Contents/Resources/tractor/Tractor.app           (search service)
 #   orc.app/Contents/Resources/engine/orc.app/Contents/Resources/distribution/
 #   orc.app/Contents/Resources/profile-seed/user.js and chrome/userChrome.css
 #   orc.app/Contents/Resources/orc.icns
 #   orc.app/Contents/Info.plist                             (from template)
 #
-# Usage: stage-macos.sh <engine.dmg> <arm64|x86_64> <version> <launcher-binary> [outdir]
+# Usage: stage-macos.sh <engine.dmg> <tractor.tar.gz> <arm64|x86_64> <version> <launcher-binary> [outdir]
 # Env:   ORC_ICNS=/path/to/orc.icns  (default: dist/orc.icns)
 set -eu
-DMG="${1:?usage: stage-macos.sh <dmg> <arch> <version> <launcher> [outdir]}"
-ARCH="${2:?arch required (arm64|x86_64)}"
-VERSION="${3:?version required}"
-LAUNCHER="${4:?launcher binary required}"
-OUTDIR="${5:-dist}"
+DMG="${1:?usage: stage-macos.sh <engine.dmg> <tractor.tar.gz> <arch> <version> <launcher> [outdir]}"
+TRACTOR_TARBALL="${2:?Tractor archive required}"
+ARCH="${3:?arch required (arm64|x86_64)}"
+VERSION="${4:?version required}"
+LAUNCHER="${5:?launcher binary required}"
+OUTDIR="${6:-dist}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ICNS="${ORC_ICNS:-$OUTDIR/orc.icns}"
-UPSTREAM_NAME="$(printf '%s%s' Libre Wolf)"
-UPSTREAM_SLUG="$(printf '%s%s' libre wolf)"
+UPSTREAM_NAME="$(printf '%s%s' 'Libre' 'Wolf')"
+UPSTREAM_SLUG="$(printf '%s%s' 'libre' 'wolf')"
 
 [ -f "$DMG" ] || { echo "stage-macos: dmg not found: $DMG" >&2; exit 1; }
+[ -f "$TRACTOR_TARBALL" ] || { echo "stage-macos: Tractor bundle not found in $TRACTOR_TARBALL" >&2; exit 1; }
 [ -x "$LAUNCHER" ] || { echo "stage-macos: launcher not executable: $LAUNCHER" >&2; exit 1; }
 [ -f "$ICNS" ] || { echo "stage-macos: orc.icns not found at $ICNS (build it: iconutil -c icns branding/orc.iconset -o $ICNS)" >&2; exit 1; }
 
@@ -46,6 +49,11 @@ rm -rf "$STAGE_ROOT"
 mkdir -p "$STAGE_ROOT"
 APP="$STAGE_ROOT/orc.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/engine" "$APP/Contents/Resources/profile-seed"
+mkdir -p "$WORK/tractor" "$APP/Contents/Resources/tractor"
+tar -xzf "$TRACTOR_TARBALL" -C "$WORK/tractor"
+TRACTOR_APP="$(find "$WORK/tractor" -name 'Tractor.app' -type d | head -n 1)"
+[ -n "$TRACTOR_APP" ] || { echo "stage-macos: Tractor.app not found in its native bundle" >&2; exit 1; }
+ditto "$TRACTOR_APP" "$APP/Contents/Resources/tractor/Tractor.app"
 
 # The engine rides inside, byte-for-byte as upstream shipped it.
 ditto "$SRC_APP" "$APP/Contents/Resources/engine/$UPSTREAM_NAME.app"

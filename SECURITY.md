@@ -29,7 +29,15 @@ boundaries are. If it disagrees with the shipped files, the files are the bug.
   some sites. Users may enable it in Settings.
 - DNS-over-HTTPS is enabled with system-resolver fallback for captive portals
   and networks where encrypted DNS is unavailable.
-- DuckDuckGo is the default search engine and suggestions are off.
+- Tractor's local loopback search page is the default search engine, and
+  suggestions are off. Tractor sends queries to its enabled public providers;
+  the clean profile includes DuckDuckGo for web results and Wikimedia Commons
+  for image results. Search providers can see the submitted query.
+- Search investigations, provider snapshots, and response cache are stored
+  locally under the root orc profile's `tractor-data` directory and shared
+  across orc workspaces. The service binds only to `127.0.0.1`, uses a random
+  per-user API token, rejects cross-origin requests, and exits after all orc
+  launcher processes registered with it close.
 - uBlock Origin is force-installed from Mozilla Add-ons and updates through
   Mozilla's signed extension channel.
 - Form history is off. Cache and form data are sanitized at shutdown; browsing

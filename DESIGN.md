@@ -28,6 +28,7 @@ legal material; no upstream name or logo is used as product branding.
 installer
   └─ orc launcher
        ├─ engine/        pinned Gecko runtime
+       ├─ tractor/       pinned Tractor local search service
        ├─ distribution/  policies.json, distribution.ini
        ├─ defaults/pref/ autoconfig
        └─ profile-seed/  user.js, chrome/userChrome.css
@@ -36,7 +37,8 @@ installer
 ```
 
 - **Home / first run:** https://nosuchmachine.net/
-- **Default search:** DuckDuckGo; users may add other engines.
+- **Default search:** Tractor's local recursive search page; DuckDuckGo web
+  results and Wikimedia Commons images are enabled by default.
 - **Content blocking:** uBlock Origin is installed by policy.
 - **Privacy:** telemetry, studies, Pocket, and sponsored content are disabled.
 - **Media and graphics:** WebGL and media playback remain functional.

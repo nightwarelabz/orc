@@ -1,0 +1,25 @@
+{
+  "product": "Tractor",
+  "version": "0.5.0",
+  "sourceTemplate": "https://github.com/nightwarelabz/tractor/releases/download/v{version}/",
+  "checksumFile": "SHA256SUMS.txt",
+  "artifacts": {
+    "windows-x86_64": {
+      "file": "Tractor-0.5.0-windows-x86_64.zip",
+      "sha256": "040fca6c434723f5c630dfe6b9230ddc0482c2831818d80f714eeeb5688fb43b"
+    },
+    "macos-arm64": {
+      "file": "Tractor-0.5.0-macos-arm64.tar.gz",
+      "sha256": "449a0788d2fea185b47b6f277e66e698a6dc85c234b024ab42ccb724c36aba23"
+    },
+    "macos-x86_64": {
+      "file": "Tractor-0.5.0-macos-x86_64.tar.gz",
+      "sha256": "c50af36691c98e6ce1ce253406251e05916f33fa01435f4807ec6cf2c379c2c4"
+    },
+    "linux-x86_64": {
+      "file": "Tractor-0.5.0-linux-x86_64.tar.gz",
+      "sha256": "fc59a358a012015004422b2e887aec66c2fb604c8e3084e69b2fa9d949a540fa"
+    }
+  },
+  "checksumPolicy": "Each bundled Tractor archive is checked against this pinned SHA-256 and the matching entry in the versioned release SHA256SUMS.txt."
+}

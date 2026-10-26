@@ -7,30 +7,37 @@
 #
 #   orc/orc                     (launcher)
 #   orc/engine/                 (pinned engine)
+#   orc/tractor/                (pinned Tractor search service)
 #   orc/engine/distribution/    (orc's policies)
 #   orc/profile-seed/user.js and chrome/userChrome.css
 #   orc/icons/                  (the face, PNG ladder)
 #   orc/orc.desktop
 #   orc/install.sh              (per-user install, no root)
 #
-# Usage: stage-linux.sh <engine.tar.xz> <version> <launcher-binary> [outdir]
+# Usage: stage-linux.sh <engine.tar.xz> <tractor.tar.gz> <version> <launcher-binary> [outdir]
 set -eu
-TARBALL="${1:?usage: stage-linux.sh <tarball> <version> <launcher> [outdir]}"
-VERSION="${2:?version required}"
-LAUNCHER="${3:?launcher binary required}"
-OUTDIR="${4:-dist}"
+TARBALL="${1:?usage: stage-linux.sh <engine.tar.xz> <tractor.tar.gz> <version> <launcher> [outdir]}"
+TRACTOR_TARBALL="${2:?Tractor archive required}"
+VERSION="${3:?version required}"
+LAUNCHER="${4:?launcher binary required}"
+OUTDIR="${5:-dist}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-UPSTREAM_SLUG="$(printf '%s%s' libre wolf)"
+UPSTREAM_SLUG="$(printf '%s%s' 'libre' 'wolf')"
 
 [ -f "$TARBALL" ] || { echo "stage-linux: tarball not found: $TARBALL" >&2; exit 1; }
+[ -f "$TRACTOR_TARBALL" ] || { echo "stage-linux: Tractor bundle not found: $TRACTOR_TARBALL" >&2; exit 1; }
 [ -x "$LAUNCHER" ] || { echo "stage-linux: launcher not executable: $LAUNCHER" >&2; exit 1; }
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/orc-stage.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 tar -xJf "$TARBALL" -C "$WORK"
+mkdir -p "$WORK/tractor"
+tar -xzf "$TRACTOR_TARBALL" -C "$WORK/tractor"
 BIN="$(find "$WORK" -name "$UPSTREAM_SLUG" -type f | head -n 1)"
 [ -n "$BIN" ] || { echo "stage-linux: engine binary not found in tarball" >&2; exit 1; }
 ENGINE_DIR="$(dirname "$BIN")"
+TRACTOR_BIN="$(find "$WORK/tractor" -path '*/Tractor/Tractor' -type f | head -n 1)"
+[ -n "$TRACTOR_BIN" ] || { echo "stage-linux: Tractor executable not found in bundle" >&2; exit 1; }
 
 STAGE_ROOT="$OUTDIR/stage-linux-x86_64"
 rm -rf "$STAGE_ROOT"
@@ -40,6 +47,8 @@ PKG="$STAGE_ROOT/orc"
 cp "$LAUNCHER" "$PKG/orc"
 chmod +x "$PKG/orc"
 cp -r "$ENGINE_DIR" "$PKG/engine"
+mkdir -p "$PKG/tractor"
+cp -r "$(dirname "$TRACTOR_BIN")" "$PKG/tractor/Tractor"
 # Full orc branding: the engine binaries take orc's name (the launcher
 # execs engine/orc, which finds its -bin beside itself), and every
 # display string + logo inside the engine is rebranded (the patch

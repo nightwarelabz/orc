@@ -1,7 +1,8 @@
 # orc installers
 
-Each platform package installs the pinned Gecko engine with orc's launcher,
-policies, profile seed, lowercase product name, and canonical icon.
+Each platform package installs the pinned Gecko engine and Tractor search
+service with orc's launcher, policies, profile seed, lowercase product name,
+and canonical icon.
 
 | OS | Output | Profile |
 |---|---|---|
@@ -13,6 +14,8 @@ policies, profile seed, lowercase product name, and canonical icon.
 
 - Every engine artifact is verified against both the SHA-256 pinned in
   `engine-manifest.json` and its publisher sidecar.
+- Every Tractor archive is verified against the SHA-256 pinned in
+  `tractor-manifest.json` and its release checksum list.
 - The native launcher always selects orc's own profile and seeds
   `profile/user.js` and `chrome/userChrome.css` only when each file does not
   already exist. This sets up the dark green browser chrome without replacing
@@ -29,12 +32,14 @@ policies, profile seed, lowercase product name, and canonical icon.
 ## Platform layout
 
 - **Windows:** the portable engine is staged under `engine/`; `orc.exe`
-  launches it. Both executable resources and the NSIS UI use `orc.ico`.
+  launches it. The bundled `tractor/` tree supplies the local search service.
+  Both executable resources and the NSIS UI use `orc.ico`.
 - **macOS:** the engine app is nested inside `orc.app`. The outer and nested
   bundle plists use the name `orc`, and both bundles receive `orc.icns`
-  before the inside-out ad-hoc seal.
+  before the inside-out ad-hoc seal. Tractor is nested in the outer app's
+  Resources folder.
 - **Linux:** the package contains `orc`, `engine/`, the full PNG icon
-  ladder, `orc.desktop`, and `install.sh`. Installation registers every
+  ladder, `tractor/`, `orc.desktop`, and `install.sh`. Installation registers every
   icon size in the user's hicolor theme.
 
 The release workflow builds all packages and publishes a top-level

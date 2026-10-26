@@ -16,21 +16,25 @@ case "$OS" in
     ENGINE_REL='engine/orc'
     SEED_REL='profile-seed/user.js'
     SEED_CHROME_REL='profile-seed/chrome/userChrome.css'
+    TRACTOR_REL='tractor/Tractor/Tractor'
     "$CC" -O2 -Wall -Wextra -std=c11 \
       -DENGINE_REL="\"$ENGINE_REL\"" -DSEED_REL="\"$SEED_REL\"" \
       -DSEED_CHROME_REL="\"$SEED_CHROME_REL\"" \
+      -DTRACTOR_REL="\"$TRACTOR_REL\"" \
       -o "$OUT" "$ROOT/launcher/launcher.c"
     ;;
   macos)
     ENGINE_REL='../Resources/engine/orc.app/Contents/MacOS/orc'
     SEED_REL='../Resources/profile-seed/user.js'
     SEED_CHROME_REL='../Resources/profile-seed/chrome/userChrome.css'
+    TRACTOR_REL='../Resources/tractor/Tractor.app/Contents/MacOS/Tractor'
     ARCHFLAG=""
     if [ -n "$ARCH" ]; then ARCHFLAG="-arch $ARCH"; fi
     # shellcheck disable=SC2086
     clang -O2 -Wall -Wextra -std=c11 $ARCHFLAG \
       -DENGINE_REL="\"$ENGINE_REL\"" -DSEED_REL="\"$SEED_REL\"" \
       -DSEED_CHROME_REL="\"$SEED_CHROME_REL\"" \
+      -DTRACTOR_REL="\"$TRACTOR_REL\"" \
       -o "$OUT" "$ROOT/launcher/launcher.c"
     ;;
   *)

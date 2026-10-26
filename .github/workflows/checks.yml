@@ -56,11 +56,26 @@ jobs:
           ACTUAL=$(sha256sum build/engine.tar.xz | cut -d ' ' -f 1)
           SIDECAR=$(awk '{print $1}' build/engine.sha256sum)
           [ "$ACTUAL" = "$PIN" ] && [ "$ACTUAL" = "$SIDECAR" ]
+      - name: Download and verify pinned Tractor search service
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAN=installers/tractor-manifest.json
+          VERSION=$(jq -r .version "$MAN")
+          FILE=$(jq -r '.artifacts["linux-x86_64"].file' "$MAN")
+          PIN=$(jq -r '.artifacts["linux-x86_64"].sha256' "$MAN")
+          BASE=$(jq -r .sourceTemplate "$MAN")
+          BASE="${BASE//\{version\}/$VERSION}"
+          curl --fail --location --retry 3 "$BASE$FILE" -o build/tractor.tar.gz
+          curl --fail --location --retry 3 "$BASE$(jq -r .checksumFile "$MAN")" -o build/tractor.sums
+          ACTUAL=$(sha256sum build/tractor.tar.gz | cut -d ' ' -f 1)
+          SIDECAR=$(awk -v file="$FILE" '$2 == file {print $1}' build/tractor.sums)
+          [ "$ACTUAL" = "$PIN" ] && [ "$ACTUAL" = "$SIDECAR" ]
       - name: Build and stage orc
         shell: bash
         run: |
           set -euo pipefail
           sh packaging/build-launcher.sh linux build/orc
-          sh packaging/stage-linux.sh build/engine.tar.xz ci build/orc dist
+          sh packaging/stage-linux.sh build/engine.tar.xz build/tractor.tar.gz ci build/orc dist
       - name: Exercise nested documents and independent workspace storage
         run: python tests/browser_recursion.py dist/stage-linux-x86_64/orc/orc

@@ -96,21 +96,34 @@ twice because Gecko retains its normal profile lock. See
 [WORKSPACES.md](WORKSPACES.md) for paths, inheritance, limits, and the
 distinction between workspace state and web-frame recursion.
 
+## Search
+
+Tractor is orc's default search engine. The browser launches Tractor's native
+service locally and opens its in-browser results page for address-bar searches.
+The service listens only on `127.0.0.1`, keeps results and history in orc's
+local profile data, and stops after the orc processes using it close. Tractor
+searches the enabled public providers; the defaults include DuckDuckGo web
+results and Wikimedia Commons images with license and creator attribution.
+Coverage depends on provider availability. Website result links open in orc.
+
 ## How it is put together
 
 - `launcher/launcher.c` — a small native launcher compiled per OS. It locates
   the bundled engine, creates orc's profile, seeds `user.js` and the default
   browser chrome stylesheet when absent, selects parent/child workspace
-  profiles, exports their lineage, and forwards all other engine arguments.
+  profiles, starts or reuses Tractor's local search service, exports their
+  lineage, and forwards all other engine arguments.
 - `distribution/policies.json` — the policy layer: no telemetry, Pocket, or
   sponsored content; HTTPS-only mode; strict tracking protection; uBlock
-  Origin; DuckDuckGo; and Blacksite home/bookmarks.
+  Origin; Tractor as the default search engine; and Blacksite home/bookmarks.
 - `distribution/distribution.ini` and `profile/chrome/userChrome.css` — the
   orc dark green default for browser chrome, tabs, and toolbar controls.
 - `packaging/` — platform staging, complete display-string rebranding, icon
   replacement, and launcher builds.
 - `installers/engine-manifest.json` — the pinned Gecko artifact set and SHA-256
   values.
+- `installers/tractor-manifest.json` — the pinned Tractor service bundles and
+  SHA-256 values.
 - `branding/` — the canonical orc face: source art, transparent master, PNG
   ladder, Windows ICO, and macOS iconset.
 - `fork/` — the source-build scaffold for a future direct Gecko fork.
@@ -120,8 +133,8 @@ distinction between workspace state and web-frame recursion.
 
 Push a `v*` tag, or run the **release** workflow manually from Actions. CI
 verifies the engine checksums, compiles the launcher, applies orc branding and
-icons, audits the staged browser, builds each package, and publishes
-`SHA256SUMS.txt` with tagged releases.
+icons, verifies and stages Tractor, audits the staged browser, builds each
+package, and publishes `SHA256SUMS.txt` with tagged releases.
 
 ## Development checks
 
