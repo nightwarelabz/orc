@@ -1,5 +1,5 @@
 /* orc — native launcher and recursive workspace boundary.
- * The bundled Gecko engine owns rendering and web security. Orc owns
+ * The bundled Gecko engine owns rendering and web security. orc owns
  * workspace identity, profile selection, first-run seeding and argv.
  * No shell, profile copying, or changes to another browser's profile. */
 #ifndef _WIN32
@@ -27,6 +27,9 @@
 #endif
 #ifndef SEED_REL
 #error "SEED_REL must be the seed user.js path relative to the launcher"
+#endif
+#ifndef SEED_CHROME_REL
+#define SEED_CHROME_REL ""
 #endif
 
 #ifdef _WIN32
@@ -69,6 +72,51 @@ static int path_append(OrcChar *out, const OrcChar *value) {
     memcpy(out + a, value, (b + 1) * sizeof(OrcChar));
     return 0;
 }
+
+static int path_append_ascii(OrcChar *out, const char *value) {
+    OrcChar converted[ORC_PATH_CAP];
+    size_t i;
+    if (strlen(value) >= ORC_PATH_CAP) return -1;
+    for (i = 0; value[i]; i++) converted[i] = (OrcChar)value[i];
+    converted[i] = 0;
+    return path_append(out, converted);
+}
+
+#ifdef _WIN32
+static int windows_directory_exists(const OrcChar *path) {
+    DWORD attr = GetFileAttributesW(path);
+    return attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+static int windows_profile_roots(OrcChar *current, OrcChar *legacy) {
+    const OrcChar *home = orc_getenv(ORC_TEXT("APPDATA"));
+    if (home && *home) {
+        if (path_copy(current, home) || path_copy(legacy, home)) return -1;
+    } else {
+        home = orc_getenv(ORC_TEXT("USERPROFILE"));
+        if (!home || !*home || path_copy(current, home) ||
+            path_copy(legacy, home) ||
+            path_append(current, ORC_TEXT("AppData\\Roaming")) ||
+            path_append(legacy, ORC_TEXT("AppData\\Roaming"))) return -1;
+    }
+    if (path_append(current, ORC_TEXT("orc")) ||
+        path_append(legacy, ORC_TEXT("Nightware Labz")) ||
+        path_append(legacy, ORC_TEXT("orc"))) return -1;
+    return 0;
+}
+
+/* Move the former per-user profile root once. If both roots already exist,
+ * leave both intact and keep using the old root so no profile is overwritten. */
+static int migrate_windows_profile_root(void) {
+    OrcChar current[ORC_PATH_CAP], legacy[ORC_PATH_CAP];
+    if (windows_profile_roots(current, legacy)) return -1;
+    if (!windows_directory_exists(legacy) || windows_directory_exists(current))
+        return 0;
+    if (MoveFileExW(legacy, current, MOVEFILE_COPY_ALLOWED | MOVEFILE_WRITE_THROUGH))
+        return 0;
+    return windows_directory_exists(current) ? 0 : -1;
+}
+#endif
 
 static int append_ascii(OrcChar *out, const char *value) {
     OrcChar native[ORC_MAX_WORKSPACE];
@@ -238,15 +286,11 @@ static int seed_profile(const OrcChar *seed, const OrcChar *target) {
 static int profile_path(OrcChar *profile, const OrcWorkspace *ws) {
     const OrcChar *home;
 #ifdef _WIN32
-    home = orc_getenv(ORC_TEXT("APPDATA"));
-    if (home && *home) {
-        if (path_copy(profile, home)) return -1;
-    } else {
-        home = orc_getenv(ORC_TEXT("USERPROFILE"));
-        if (!home || !*home || path_copy(profile, home) ||
-            path_append(profile, ORC_TEXT("AppData\\Roaming"))) return -1;
-    }
-    if (path_append(profile, ORC_TEXT("Nightware Labz\\orc"))) return -1;
+    OrcChar current[ORC_PATH_CAP], legacy[ORC_PATH_CAP];
+    if (windows_profile_roots(current, legacy)) return -1;
+    if (windows_directory_exists(legacy)) {
+        if (path_copy(profile, legacy)) return -1;
+    } else if (path_copy(profile, current)) return -1;
 #elif defined(__APPLE__)
     home = getenv("HOME");
     if (!home || home[0] != '/' || path_copy(profile, home) ||
@@ -393,12 +437,23 @@ int orc_main(int argc, OrcChar **argv) {
         return 0;
     }
     OrcChar profile[ORC_PATH_CAP];
+    if (ws.info) {
+        if (profile_path(profile, &ws)) {
+            fprintf(stderr, "orc: cannot resolve workspace profile (missing home or path too long)\n");
+            return 1;
+        }
+        return print_info(&ws, profile) ? 1 : 0;
+    }
+#ifdef _WIN32
+    if (migrate_windows_profile_root()) {
+        fprintf(stderr, "orc: could not migrate the existing profile folder safely\n");
+        return 1;
+    }
+#endif
     if (profile_path(profile, &ws)) {
         fprintf(stderr, "orc: cannot resolve workspace profile (missing home or path too long)\n");
         return 1;
     }
-    if (ws.info) return print_info(&ws, profile) ? 1 : 0;
-
     OrcChar dir[ORC_PATH_CAP], engine[ORC_PATH_CAP], seed[ORC_PATH_CAP], userjs[ORC_PATH_CAP];
     if (self_dir(dir) || path_copy(engine, dir) || path_copy(seed, dir)) goto path_error;
     /* Compile-time relative paths contain ASCII only. */
@@ -427,6 +482,17 @@ int orc_main(int argc, OrcChar **argv) {
     if (seed_profile(seed, userjs)) {
         fprintf(stderr, "orc: could not seed workspace profile; check the installation and permissions\n");
         return 1;
+    }
+    if (SEED_CHROME_REL[0]) {
+        OrcChar chrome_seed[ORC_PATH_CAP], chrome_dir[ORC_PATH_CAP], chrome_css[ORC_PATH_CAP];
+        if (path_copy(chrome_seed, dir) || path_append_ascii(chrome_seed, SEED_CHROME_REL) ||
+            path_copy(chrome_dir, profile) || path_append(chrome_dir, ORC_TEXT("chrome")) ||
+            make_dirs(chrome_dir) || path_copy(chrome_css, chrome_dir) ||
+            path_append(chrome_css, ORC_TEXT("userChrome.css")) ||
+            seed_profile(chrome_seed, chrome_css)) {
+            fprintf(stderr, "orc: could not seed the default workspace theme; check the installation and permissions\n");
+            return 1;
+        }
     }
     if (export_workspace(&ws)) {
         fprintf(stderr, "orc: could not export workspace context\n");

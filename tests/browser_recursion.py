@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run a staged Linux Orc against a loopback recursive browsing fixture.
+"""Run a staged Linux orc against a loopback recursive browsing fixture.
 
 Uses the actual bundled engine, two simultaneous workspace profiles, and
 four document levels per workspace. All reports stay on the loopback
@@ -24,7 +24,7 @@ from urllib.parse import parse_qs, urlsplit
 
 DEPTH = 3
 SCOPES = ("alpha", "beta")
-FRAME = r'''<!doctype html><meta charset="utf-8"><title>Orc recursion probe</title>
+FRAME = r'''<!doctype html><meta charset="utf-8"><title>orc recursion probe</title>
 <script>
 (async () => {
   const query = new URLSearchParams(location.search);

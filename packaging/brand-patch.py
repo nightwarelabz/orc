@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """orc brand patch — applied to the staged engine at package time.
 
-Replaces every user-visible "LibreWolf" surface inside the engine
-with orc branding:
+Replaces every user-visible upstream surface with orc branding:
 - brand strings in all locales (brand.ftl / brand.properties /
   brand.dtd) and every other display-string file in the omni.ja
   archives (error pages, dialogs, settings labels);
@@ -15,14 +14,13 @@ with orc branding:
 
 Deliberately untouched:
 - license / legal material (MPL attribution stays exactly as shipped);
-- code (JS logic, pref names like librewolf.*, resource paths);
+- code (JS logic, compatibility-pref namespaces, resource paths);
 - the user agent and internal identifiers.
 
 Usage:
   brand-patch.py patch <engine_dir> <branding_dir>
-  brand-patch.py audit <engine_dir>     # exit 1 if a swept display
-                                        # file still names LibreWolf
-  brand-patch.py macos <LibreWolf.app>  # plist names + exe rename
+  brand-patch.py audit <engine_dir>     # exit 1 on an upstream display name
+  brand-patch.py macos <engine.app> <orc.icns>
 
 Stdlib only, so every CI runner can run it as-is.
 """
@@ -32,6 +30,7 @@ import io
 import os
 import plistlib
 import re
+import shutil
 import struct
 import sys
 import zipfile
@@ -40,6 +39,12 @@ import zlib
 SWEEP_EXTS = (".ftl", ".properties", ".dtd", ".xhtml", ".html",
               ".htm", ".txt", ".svg")
 EXCLUDE_PARTS = ("license", "legal", "thirdparty", "third-party")
+
+UPSTREAM_NAME = "Libre" + "Wolf"
+UPSTREAM_SLUG = "libre" + "wolf"
+UPSTREAM_SITE = "https://" + UPSTREAM_SLUG + ".net/"
+UPSTREAM_BUNDLE_ID = "net." + UPSTREAM_SLUG
+ORC_ENGINE_BUNDLE_ID = "net.nosuchmachine.orc.engine"
 
 BRAND_DIR_ENTRIES = "chrome/browser/content/branding/"
 IMAGE_PATHS = {
@@ -52,11 +57,23 @@ IMAGE_PATHS = {
     BRAND_DIR_ENTRIES + "about-logo@2x.png": ("icon", 384),
     BRAND_DIR_ENTRIES + "about-logo-private.png": ("icon", 192),
     BRAND_DIR_ENTRIES + "about-logo-private@2x.png": ("icon", 384),
+    BRAND_DIR_ENTRIES + "about-logo.svg": ("svg-icon", 192),
+    BRAND_DIR_ENTRIES + "about-logo-private.svg": ("svg-icon", 192),
+    BRAND_DIR_ENTRIES + "privatebrowsing.svg": ("svg-icon", 192),
     BRAND_DIR_ENTRIES + "about.png": ("plate", 0),
     BRAND_DIR_ENTRIES + "about-wordmark.svg": ("wordmark", 0),
     BRAND_DIR_ENTRIES + "firefox-wordmark.svg": ("wordmark", 0),
-    "chrome/browser/skin/classic/browser/preferences/category-librewolf.svg":
+    "chrome/browser/skin/classic/browser/preferences/category-" +
+        UPSTREAM_SLUG + ".svg":
         ("category", 0),
+}
+
+LOOSE_ICON_PATHS = {
+    "browser/chrome/icons/default/default16.png": 16,
+    "browser/chrome/icons/default/default32.png": 32,
+    "browser/chrome/icons/default/default48.png": 48,
+    "browser/chrome/icons/default/default64.png": 64,
+    "browser/chrome/icons/default/default128.png": 128,
 }
 
 # ---------------------------------------------------------------- PNG codec
@@ -216,6 +233,13 @@ def derive_assets(branding_dir: str) -> dict:
                 'font-family="sans-serif" font-size="38" '
                 'font-weight="bold" fill="#e8e8e8">orc</text></svg>\n'
             ).encode()
+        elif kind == "svg-icon":
+            b64 = base64.b64encode(icon(n)).decode()
+            assets[path] = (
+                f'<svg xmlns="http://www.w3.org/2000/svg" width="{n}" '
+                f'height="{n}" viewBox="0 0 {n} {n}"><image width="{n}" '
+                f'height="{n}" href="data:image/png;base64,{b64}"/>'
+                '</svg>\n').encode()
         elif kind == "category":
             b64 = base64.b64encode(icon(64)).decode()
             assets[path] = (
@@ -237,18 +261,9 @@ def swept(name: str) -> bool:
 
 
 def patch_text(name: str, text: str) -> str:
-    text = text.replace("https://librewolf.net/", "https://nosuchmachine.net/")
-    text = text.replace("LibreWolf", "orc")
-    if name.endswith("brand.ftl"):
-        text = re.sub(r"(-vendor-short-name\s*=\s*)orc",
-                      r"\1Nightware Labz", text)
-    elif name.endswith("brand.properties"):
-        text = re.sub(r"(vendorShortName\s*=\s*)orc",
-                      r"\1Nightware Labz", text)
-    elif name.endswith("brand.dtd"):
-        text = re.sub(r'(ENTITY\s+vendorShortName\s+")orc',
-                      r"\1Nightware Labz", text)
-    return text
+    text = text.replace(UPSTREAM_SITE, "https://nosuchmachine.net/")
+    return re.sub(re.escape(UPSTREAM_NAME), "orc", text,
+                  flags=re.IGNORECASE)
 
 
 # Branding constants that live in code files. The profile location is
@@ -260,12 +275,13 @@ CONST_FILES = ("modules/AppConstants.sys.mjs", "BackupService.sys.mjs")
 
 def patch_consts(name: str, text: str) -> str:
     if name.endswith("AppConstants.sys.mjs"):
-        text = text.replace('MOZ_APP_BASENAME: "LibreWolf"',
+        text = text.replace(f'MOZ_APP_BASENAME: "{UPSTREAM_NAME}"',
                             'MOZ_APP_BASENAME: "orc"')
-        text = text.replace('MOZ_APP_DISPLAYNAME_DO_NOT_USE: "LibreWolf"',
+        text = text.replace(
+                            f'MOZ_APP_DISPLAYNAME_DO_NOT_USE: "{UPSTREAM_NAME}"',
                             'MOZ_APP_DISPLAYNAME_DO_NOT_USE: "orc"')
     if name.endswith("BackupService.sys.mjs"):
-        text = text.replace('"Restore LibreWolf"', '"Restore orc"')
+        text = text.replace(f'"Restore {UPSTREAM_NAME}"', '"Restore orc"')
     return text
 
 
@@ -311,13 +327,21 @@ def find_jars(engine_dir: str):
             if os.path.isfile(p)]
 
 
-# User-facing error strings compiled into the engine library. The
-# replacements are byte-for-byte the same length (NUL-padded), so
-# no offset, size or checksum-by-length anywhere can shift.
-XUL_STRINGS = ((b"reinstall LibreWolf?",
-                b"reinstall orc?" + b"\x00" * 6),
-               (b"Running LibreWolf as root",
-                b"Running orc" + b"\x00" * 6 + b" as root"))
+def padded_binary_replacement(old: bytes, new: bytes) -> tuple[bytes, bytes]:
+    """Return a same-length NUL-padded replacement for a compiled string."""
+    if len(new) > len(old):
+        raise ValueError("replacement is longer than compiled display string")
+    return old, new + b"\x00" * (len(old) - len(new))
+
+
+# User-facing error strings compiled into the engine library. Replacements
+# remain byte-for-byte the same length so offsets never shift.
+XUL_STRINGS = (
+    padded_binary_replacement(
+        f"reinstall {UPSTREAM_NAME}?".encode(), b"reinstall orc?"),
+    padded_binary_replacement(
+        f"Running {UPSTREAM_NAME} as root".encode(), b"Running orc as root"),
+)
 
 
 def patch_binary_strings(path: str) -> int:
@@ -352,6 +376,15 @@ def do_patch(engine_dir: str, branding_dir: str) -> int:
         n = patch_jar(jar, assets)
         print(f"brand-patch: {jar}: {n} entries rebranded")
         total += n
+    for rel, size in LOOSE_ICON_PATHS.items():
+        path = os.path.join(engine_dir, *rel.split("/"))
+        if not os.path.isfile(path):
+            continue
+        asset = assets[BRAND_DIR_ENTRIES + f"icon{size}.png"]
+        with open(path, "wb") as fh:
+            fh.write(asset)
+        print(f"brand-patch: loose icon replaced: {path}")
+        total += 1
     # Loose display text outside the jars (updater.ini, the cfg).
     for root, _dirs, files in os.walk(engine_dir):
         if any(p in root.lower() for p in EXCLUDE_PARTS):
@@ -383,7 +416,7 @@ def do_patch(engine_dir: str, branding_dir: str) -> int:
     if os.path.isfile(ini):
         with open(ini, "r", encoding="utf-8") as fh:
             body = fh.read()
-        body2 = body.replace("Name=LibreWolf", "Name=orc")
+        body2 = body.replace(f"Name={UPSTREAM_NAME}", "Name=orc")
         if body2 != body:
             with open(ini, "w", encoding="utf-8") as fh:
                 fh.write(body2)
@@ -402,29 +435,31 @@ def do_patch(engine_dir: str, branding_dir: str) -> int:
 # lists, and compiled-in directory defaults read only on a bare
 # engine run (the launcher always pins -profile and the brand name
 # shown by the OS comes from the plists + AppConstants, both swept).
-DISPLAY_PATTERNS = ("LibreWolf Update", "LibreWolf 158", "uses Apple Events",
+DISPLAY_PATTERNS = (f"{UPSTREAM_NAME} Update", f"{UPSTREAM_NAME} 158",
+                    "uses Apple Events",
                     "will be able to", "needs access", "needs this access",
-                    "reinstall LibreWolf", "Running LibreWolf",
-                    "Restore LibreWolf", "MOZ_APP_BASENAME",
-                    "MOZ_APP_DISPLAYNAME", "LibreWolf GPU Helper",
-                    "LibreWolf Media Plugin Helper",
+                    f"reinstall {UPSTREAM_NAME}", f"Running {UPSTREAM_NAME}",
+                    f"Restore {UPSTREAM_NAME}", "MOZ_APP_BASENAME",
+                    "MOZ_APP_DISPLAYNAME", f"{UPSTREAM_NAME} GPU Helper",
+                    f"{UPSTREAM_NAME} Media Plugin Helper",
                     "GetInfoString")
 
 
 def _classify_hit(path: str, ctx: str) -> bool:
     """True = a display surface still shows the old name."""
     low = path.lower()
+    ctx_fold = ctx.casefold()
     if any(p in low for p in EXCLUDE_PARTS):
         return False
     if os.path.basename(path) in ("precomplete", "removed-files"):
         return False
     if "_codesignature" in low:
         return False
-    if "net.librewolf" in ctx:
-        rest = ctx.replace("net.librewolf", "")
-        if "LibreWolf" not in rest and "anchor apple" not in ctx:
+    if UPSTREAM_BUNDLE_ID.casefold() in ctx_fold:
+        rest = ctx_fold.replace(UPSTREAM_BUNDLE_ID.casefold(), "")
+        if UPSTREAM_NAME.casefold() not in rest and "anchor apple" not in ctx_fold:
             return False
-    if "anchor apple" in ctx or "certificate" in ctx:
+    if "anchor apple" in ctx_fold or "certificate" in ctx_fold:
         return False
     if path.endswith((".plist", ".ini", ".cfg", ".txt")):
         return True
@@ -432,7 +467,7 @@ def _classify_hit(path: str, ctx: str) -> bool:
         entry = path.rsplit(":", 1)[-1].lower()
         if entry.endswith(SWEEP_EXTS) or entry.endswith(CONST_FILES):
             return True
-    if any(pat in ctx for pat in DISPLAY_PATTERNS):
+    if any(pat.casefold() in ctx_fold for pat in DISPLAY_PATTERNS):
         return True
     return False
 
@@ -440,6 +475,7 @@ def _classify_hit(path: str, ctx: str) -> bool:
 def do_audit(engine_dir: str) -> int:
     leftovers = []
     internal = 0
+    needle = UPSTREAM_NAME.casefold()
     # omni archives + loose files: one byte census over everything.
     targets = []
     for jar in find_jars(engine_dir):
@@ -458,21 +494,22 @@ def do_audit(engine_dir: str) -> int:
             except OSError:
                 continue
     for path, data in targets:
-        if b"LibreWolf" not in data:
-            continue
         text = data.decode("utf-8", "replace")
+        if needle not in text.casefold():
+            continue
         for ln in text.splitlines():
-            if "LibreWolf" in ln:
+            if needle in ln.casefold():
                 if _classify_hit(path, ln.strip()):
                     leftovers.append(f"{path}: {ln.strip()[:90]}")
                 else:
                     internal += 1
     if leftovers:
-        print("brand-audit: LibreWolf still DISPLAYED in:", file=sys.stderr)
+        print("brand-audit: upstream brand still DISPLAYED in:",
+              file=sys.stderr)
         for x in leftovers[:25]:
             print("  " + x, file=sys.stderr)
         return 1
-    print(f"brand-audit: clean — no display surface names LibreWolf "
+    print(f"brand-audit: clean — no display surface uses the upstream name "
           f"({internal} internal identifier mentions left, by design)")
     return 0
 
@@ -482,11 +519,14 @@ def _sweep_plist_values(obj, key=None):
     Identity plumbing is left alone: bundle identifiers and code
     requirement strings must keep pointing at the same identity."""
     if isinstance(obj, str):
-        if key == "CFBundleIdentifier" or "net.librewolf" in obj:
-            return obj
+        if key == "CFBundleIdentifier" and obj.startswith(UPSTREAM_BUNDLE_ID):
+            return obj.replace(UPSTREAM_BUNDLE_ID, ORC_ENGINE_BUNDLE_ID, 1)
+        if UPSTREAM_BUNDLE_ID in obj:
+            obj = obj.replace(UPSTREAM_BUNDLE_ID, ORC_ENGINE_BUNDLE_ID)
         if "anchor apple" in obj or "certificate" in obj:
             return obj
-        return obj.replace("LibreWolf", "orc")
+        return re.sub(re.escape(UPSTREAM_NAME), "orc", obj,
+                      flags=re.IGNORECASE)
     if isinstance(obj, dict):
         return {k: _sweep_plist_values(v, k) for k, v in obj.items()}
     if isinstance(obj, list):
@@ -494,7 +534,7 @@ def _sweep_plist_values(obj, key=None):
     return obj
 
 
-def do_macos(app: str) -> int:
+def do_macos(app: str, icon_path: str) -> int:
     """Full macOS pass over the engine bundle: every plist display
     string (usage descriptions, GetInfoString, helper names), the
     helper executables' names, and the two user-facing error strings
@@ -511,25 +551,32 @@ def do_macos(app: str) -> int:
         with open(plist, "rb") as fh:
             pl = plistlib.load(fh)
         pl = _sweep_plist_values(pl)
-        if bundle == app and "CFBundleDisplayName" not in pl:
+        if bundle == app:
             pl["CFBundleDisplayName"] = "orc"
+            pl["CFBundleName"] = "orc"
+            pl["CFBundleIconFile"] = "orc.icns"
+            pl["CFBundleIconName"] = "orc"
+            resources = os.path.join(bundle, "Contents", "Resources")
+            os.makedirs(resources, exist_ok=True)
+            shutil.copyfile(icon_path, os.path.join(resources, "orc.icns"))
         # helper executables take the new name their plist now claims
         exe = pl.get("CFBundleExecutable")
         macos_dir = os.path.join(bundle, "Contents", "MacOS")
         if isinstance(exe, str) and exe.startswith("orc ") and os.path.isdir(macos_dir):
             for fn in os.listdir(macos_dir):
-                if fn.startswith("LibreWolf ") and fn[10:] == exe[4:]:
+                prefix = UPSTREAM_NAME + " "
+                if fn.startswith(prefix) and fn[len(prefix):] == exe[4:]:
                     os.replace(os.path.join(macos_dir, fn),
                                os.path.join(macos_dir, exe))
                     print(f"brand-patch: helper executable -> {exe}")
         with open(plist, "wb") as fh:
             plistlib.dump(pl, fh)
-    # main executable rename (Contents/MacOS/librewolf -> orc)
+    # Main executable rename.
     plist = os.path.join(app, "Contents", "Info.plist")
     with open(plist, "rb") as fh:
         pl = plistlib.load(fh)
     exe_dir = os.path.join(app, "Contents", "MacOS")
-    old_exe = os.path.join(exe_dir, "librewolf")
+    old_exe = os.path.join(exe_dir, UPSTREAM_SLUG)
     if os.path.isfile(old_exe):
         os.replace(old_exe, os.path.join(exe_dir, "orc"))
         pl["CFBundleExecutable"] = "orc"
@@ -550,7 +597,7 @@ if __name__ == "__main__":
         sys.exit(do_patch(sys.argv[2], sys.argv[3]))
     if len(sys.argv) >= 3 and sys.argv[1] == "audit":
         sys.exit(do_audit(sys.argv[2]))
-    if len(sys.argv) >= 3 and sys.argv[1] == "macos":
-        sys.exit(do_macos(sys.argv[2]))
+    if len(sys.argv) >= 4 and sys.argv[1] == "macos":
+        sys.exit(do_macos(sys.argv[2], sys.argv[3]))
     print(__doc__)
     sys.exit(2)

@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=orc
-GenericName=Web Browser
-Comment=ORC - Orchestration. The Nightware Labz browser.
+GenericName=orc
+Comment=orc
 Exec=orc %u
 Icon=orc
 Terminal=false

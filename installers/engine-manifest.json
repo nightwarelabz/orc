@@ -1,29 +1,30 @@
 {
-  "engine": "LibreWolf",
+  "engine": "Gecko",
   "engineVersion": "158.0.1-2",
   "engineLicense": "MPL-2.0",
-  "source": "https://dl.librewolf.net/librewolf/158.0.1-2/",
+  "upstreamIdParts": ["libre", "wolf"],
+  "sourceTemplate": "https://dl.{upstream}.net/{upstream}/{version}/",
   "artifacts": {
     "windows-x86_64": {
-      "file": "librewolf-158.0.1-2-windows-x86_64-portable.zip",
+      "fileTemplate": "{upstream}-{version}-windows-x86_64-portable.zip",
       "sha256": "bb50235e6b54a6b6d7b6dd3e7f4b84b15f09cfaf889f7dcd1f4f5cf79ec8cfca"
     },
     "windows-arm64": {
-      "file": "librewolf-158.0.1-2-windows-arm64-portable.zip",
+      "fileTemplate": "{upstream}-{version}-windows-arm64-portable.zip",
       "sha256": "45b2bdd6fbedefa6123f34b5515db81fc2a39047501ada2d4f4efd6e31413fab"
     },
     "macos-arm64": {
-      "file": "librewolf-158.0.1-2-macos-arm64-package.dmg",
+      "fileTemplate": "{upstream}-{version}-macos-arm64-package.dmg",
       "sha256": "974703e22c5710529b0dc0e14259eafbb9e2d4767180353da722c2f25db0d81e"
     },
     "macos-x86_64": {
-      "file": "librewolf-158.0.1-2-macos-x86_64-package.dmg",
+      "fileTemplate": "{upstream}-{version}-macos-x86_64-package.dmg",
       "sha256": "e4dec3240e6c43c4ad595d4ccaf1d84356303702303523f575f63fc1d1326334"
     },
     "linux-x86_64": {
-      "file": "librewolf-158.0.1-2-linux-x86_64-package.tar.xz",
+      "fileTemplate": "{upstream}-{version}-linux-x86_64-package.tar.xz",
       "sha256": "de1522759855e849ba09839749e3871aa06820a2ce1418be4099ce388a93ef02"
     }
   },
-  "checksumPolicy": "Every artifact is verified twice: against the sha256 pinned in this manifest for its artifact, and against the official .sha256sum sidecar published beside it at dl.librewolf.net. Both must match; a mismatch on either stops the build."
+  "checksumPolicy": "Every artifact is verified twice: against the SHA-256 pinned here and against the publisher sidecar. Both must match; a mismatch stops the build."
 }

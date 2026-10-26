@@ -1,123 +1,90 @@
 # orc — design and checked options
 
-Chase's directive (2026-10-24): port our own version of LibreWolf, name it
-**orc**, and build our own **wraparound browser system** with it, so we are
-truly browser-neutral — people install orc, run it, and use
-nosuchmachine.net and anything else they desire.
-
-## What "browser-neutral" has to mean
-
-Blacksite OS today only runs inside someone else's browser — and it shows:
-COEP/Safari quirks, Chromium-only corners, and every host browser's own
-rules. Neutral means **the engine ships with orc**, identical on every OS,
-so Blacksite behaves the same everywhere. That rules out any shell that
-borrows the host's engine.
+orc is a recursive browser that carries the same pinned Gecko engine,
+policies, profile defaults, and workspace model on Windows, macOS, and Linux.
+The goal is browser neutrality: Blacksite and any other site run against the
+engine orc ships instead of inheriting whichever engine happens to be present
+on the host.
 
 ## Options checked
 
-1. **Host-WebView shell (Tauri / Electron / Wails) — REJECTED as the main line.**
-   Tauri/Wails render with the OS webview (WebView2 on Windows, WebKit on
-   macOS/Linux) — that is the opposite of neutral, it's three engines in a
-   trenchcoat. Electron ships Chromium: neutral, but Chromium, with none of
-   LibreWolf's posture, and it would make Blacksite a Chromium monoculture
-   app instead of a web citizen.
+1. **Host WebView shell — rejected.** A system WebView would produce different
+   behavior on each OS. An Electron shell would ship a consistent engine, but
+   it would make the project Chromium-only.
+2. **Pinned Gecko distribution — current architecture.** orc wraps a verified
+   upstream Gecko artifact with its own launcher, name, icon, policy layer,
+   profile seed, and workspace boundary. This is portable and releaseable
+   without a full browser build farm.
+3. **Direct Gecko source build — prepared for a later version.** The
+   `fork/` scaffold records the branding and build direction for moving the
+   current distribution layer into a full source build.
 
-2. **Distribution wrap around the Gecko engine — CHOSEN for v1 (the wraparound).**
-   Mozilla's official distribution mechanism: a `distribution/` folder with
-   `policies.json`, plus autoconfig + a seeded profile (`user.js`).
-   orc wraps **unmodified LibreWolf/Firefox engine binaries**, adds its own
-   name, branding, workspace profiles, home (nosuchmachine.net), and hardening.
-   Because the engine binary itself ships in the installer,
-   the same Gecko runs on Windows, macOS and Linux — neutral by
-   construction, shippable now, no 30 GB build farm.
-   - License: engine MPL-2.0. LibreWolf itself is MPL-2.0.
-   - Trademark law (checked): modified/rebranded builds may NOT use the
-     Firefox or LibreWolf name/logo as their user-facing brand. `orc` is
-     its own name and mark — compliant by design. We may state in words
-     that orc is built on Mozilla's open-source Gecko technology, with the
-     required "not officially associated with Mozilla" line.
+The bundled engine remains MPL-2.0. Upstream legal notices are preserved as
+legal material; no upstream name or logo is used as product branding.
 
-3. **True source fork of LibreWolf — PREPARED for v2, not the v1 gate.**
-   LibreWolf's own road: fetch Firefox source, patch, build with
-   `--with-branding=browser/branding/orc` and a mozconfig. Real numbers
-   from LibreWolf's build docs: 2–4 h per build, ≥8 GB RAM, ~30 GB disk,
-   per-OS builders, plus Windows code-signing and macOS notarization for
-   installers people can actually run. That is a CI project, not a first
-   ship. `fork/mozconfig` + `fork/README.md` in this repo hold the scaffold
-   so v2 is a continuation, not a restart.
+## Architecture
 
-## The wraparound system (v1 architecture)
-
-```
-installer (per OS)
-  └─ orc launcher (tiny native shim, per OS — installers/)
-       ├─ engine/        LibreWolf binaries, unmodified (MPL-2.0)
-       ├─ distribution/  policies.json  ← this repo, versioned
-       ├─ defaults/pref/ autoconfig.js → orc.cfg
-       └─ profile seed/  user.js (LibreWolf posture, orc home)
-  profile (user's machine, orc's own folder — never Firefox's)
-  updates: engine follows LibreWolf releases; the wrap checks
-           nightwarelabz/orc releases and re-seeds distribution/
-           without touching the user's profile data.
+```text
+installer
+  └─ orc launcher
+       ├─ engine/        pinned Gecko runtime
+       ├─ distribution/  policies.json, distribution.ini
+       ├─ defaults/pref/ autoconfig
+       └─ profile-seed/  user.js, chrome/userChrome.css
+  profile               orc-owned user data
+  updates               verified orc releases
 ```
 
-- **Home / first run:** https://nosuchmachine.net/ (Blacksite OS at `/`).
-- **Default search:** DuckDuckGo. Google/Bing/Amazon/eBay engines removed
-  by policy; user can re-add — it's their browser.
-- **Blocker:** uBlock Origin force-installed by policy (LibreWolf does the same).
-- **No account, no telemetry, no Pocket, no sponsored anything** — by policy,
-  not by promise.
-- **Blacksite inside orc:** all platforms get the same Gecko version.
-  Blacksite's headers must still establish cross-origin isolation for
-  SharedArrayBuffer, workers and nested documents. Orc retains CSP, COOP,
-  COEP and framing checks; it does not override the server's policy.
+- **Home / first run:** https://nosuchmachine.net/
+- **Default search:** DuckDuckGo; users may add other engines.
+- **Content blocking:** uBlock Origin is installed by policy.
+- **Privacy:** telemetry, studies, Pocket, and sponsored content are disabled.
+- **Media and graphics:** WebGL and media playback remain functional.
+- **Default appearance:** the browser chrome uses orc's dark green palette;
+  websites retain their own page colors.
+- **Branding:** the name is lowercase `orc`; every supported icon surface
+  uses the canonical face from `branding/`.
 
 ## Recursive workspace boundary
 
-The launcher now models a workspace as a canonical path with an explicit
-parent and a maximum depth of 16. `--orc-child` descends into a separate
-profile; `--orc-parent` selects its ancestor; `--orc-workspace-info` reports
-the lineage without launching the engine or writing any profile data.
-The default workspace uses the original profile path. Named branches use
-`-no-remote` so their URLs cannot land in another running browser context.
+The launcher models a workspace as a canonical path with an explicit parent
+and a maximum depth of 16. `--orc-child` descends into a separate profile,
+`--orc-parent` selects its ancestor, and `--orc-workspace-info` reports
+lineage without launching the engine or writing profile data.
 
-Each branch is seeded independently. No parent's cookies, permissions,
-saved passwords or session data are copied. This layer supplies context
-identity and browser state separation; it does not infer page ancestry,
-automatically create a tab tree, or create OS security sandboxes.
-[WORKSPACES.md](WORKSPACES.md) defines the command-line contract and paths.
+Each branch is seeded independently. Cookies, permissions, saved passwords,
+and sessions are not copied from the parent. Named branches use Gecko's
+`-no-remote` mode so a URL cannot be handed to a different running context.
+This creates browser-state separation, not a new OS security sandbox.
 
-Native regression checks run on Windows, macOS and Linux. Linux CI also
-stages the pinned engine and loads two simultaneous workspaces with four
-nested document levels each, checking isolated workers, Wasm, shared
-memory, storage separation and a frame denied by server policy.
+[WORKSPACES.md](WORKSPACES.md) defines the command-line contract, canonical
+paths, inheritance rules, and limits. Native tests run on Windows, macOS, and
+Linux; Linux CI also exercises nested documents, workers, Wasm, shared memory,
+isolated storage, and a server-denied frame with the staged browser.
 
-## orc inside Blacksite OS (the third surface)
+## orc inside Blacksite OS
 
-Blacksite also gets an **orc app window** — a browsing room whose job is to
-hand the visitor *out* to orc proper (download/install) and, for pages that
-allow framing, preview them in-OS. Honest limit: the OS CSP currently has
-no `frame-src`, so external frames are blocked by `default-src 'self'`;
-adding `frame-src https:` to the OS scope is part of that integration and
-many sites still refuse framing (X-Frame-Options) — those open in orc/
-the system browser instead. The in-OS app is a door, not a fake engine.
+Blacksite exposes an orc room that links visitors to the native download and
+may preview pages that allow framing. CSP, COOP, COEP, certificate checks, and
+`X-Frame-Options` remain enforced. The in-OS room is a doorway to orc, not a
+replacement engine.
 
-## Naming / brand
+## Branding contract
 
-- Name: **orc** (all lowercase) — **ORC = Orchestration** (Chase,
-  2026-10-24). House: Nightware Labz.
-- Mark: **the pixel orc face Chase chose** (2026-10-24) as orc's browser
-  icon and main icon everywhere — see `branding/BRANDING.md` for the
-  master, the transparent cutout, and the full size ladder (PNG/ICO/
-  iconset). In Blacksite OS it rides as an image by deliberate exception
-  to the drawn-icon house style; everywhere else it is the app icon.
-- Never use Firefox/LibreWolf logos or names in orc's user-facing brand.
+- The displayed name is exactly **orc**, always lowercase and never expanded.
+- The canonical mark is the pixel orc face in `branding/`.
+- The same face is used for browser chrome, About/private-browsing artwork,
+  executables, app bundles, installers, shortcuts, launchers, taskbar/dock
+  surfaces, releases, and repository presentation.
+- User-visible upstream names and logos are rejected by the packaging audit.
+
+See [branding/BRANDING.md](branding/BRANDING.md) for the required surface
+matrix and asset inventory.
 
 ## Status
 
-The repository ships a native launcher, per-platform staging scripts,
-release packaging, policies, branding and recursive workspace profiles.
-The release workflow builds the packages; paid signing and notarization
-remain future work. `UPDATES.md` describes the planned update subsystem,
-not implemented launcher functionality. The in-OS browsing room is
-maintained in the nosuchmachine.net repository.
+The repository ships the native launcher, platform staging scripts, release
+packaging, policy layer, branding pipeline, and recursive workspace profiles.
+Paid Windows signing and macOS notarization remain future work.
+[UPDATES.md](UPDATES.md) describes the planned updater and is not a claim that
+the updater is already implemented.

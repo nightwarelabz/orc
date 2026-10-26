@@ -13,7 +13,8 @@ $Root = Split-Path -Parent $PSScriptRoot
 
 $defs = @(
     '/DENGINE_REL="engine\\orc.exe"',
-    '/DSEED_REL="profile-seed\\user.js"'
+    '/DSEED_REL="profile-seed\\user.js"',
+    '/DSEED_CHROME_REL="profile-seed\\chrome\\userChrome.css"'
 )
 $outDir = Split-Path -Parent $Out
 if ($outDir -and -not (Test-Path $outDir)) { New-Item -ItemType Directory -Force $outDir | Out-Null }

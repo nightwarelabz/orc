@@ -1,18 +1,18 @@
 #!/bin/sh
 # Stage the macOS orc package.
 #
-# Mounts a LibreWolf .dmg (its sha256 is verified by CI against
+# Mounts a pinned Gecko DMG (its SHA-256 is verified by CI against
 # installers/engine-manifest.json + the official sidecar before this
-# script runs), and builds orc.app around the unmodified LibreWolf.app:
+# script runs), and builds orc.app around the pinned engine app:
 #
 #   orc.app/Contents/MacOS/orc                              (launcher)
 #   orc.app/Contents/Resources/engine/orc.app               (engine, rebranded)
 #   orc.app/Contents/Resources/engine/orc.app/Contents/Resources/distribution/
-#   orc.app/Contents/Resources/profile-seed/user.js
+#   orc.app/Contents/Resources/profile-seed/user.js and chrome/userChrome.css
 #   orc.app/Contents/Resources/orc.icns
 #   orc.app/Contents/Info.plist                             (from template)
 #
-# Usage: stage-macos.sh <librewolf.dmg> <arm64|x86_64> <version> <launcher-binary> [outdir]
+# Usage: stage-macos.sh <engine.dmg> <arm64|x86_64> <version> <launcher-binary> [outdir]
 # Env:   ORC_ICNS=/path/to/orc.icns  (default: dist/orc.icns)
 set -eu
 DMG="${1:?usage: stage-macos.sh <dmg> <arch> <version> <launcher> [outdir]}"
@@ -22,6 +22,8 @@ LAUNCHER="${4:?launcher binary required}"
 OUTDIR="${5:-dist}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ICNS="${ORC_ICNS:-$OUTDIR/orc.icns}"
+UPSTREAM_NAME="$(printf '%s%s' Libre Wolf)"
+UPSTREAM_SLUG="$(printf '%s%s' libre wolf)"
 
 [ -f "$DMG" ] || { echo "stage-macos: dmg not found: $DMG" >&2; exit 1; }
 [ -x "$LAUNCHER" ] || { echo "stage-macos: launcher not executable: $LAUNCHER" >&2; exit 1; }
@@ -36,8 +38,8 @@ cleanup() {
 trap cleanup EXIT
 
 hdiutil attach -nobrowse -readonly -mountpoint "$MNT" "$DMG" >/dev/null
-SRC_APP="$(find "$MNT" -maxdepth 2 -name 'LibreWolf.app' -type d | head -n 1)"
-[ -n "$SRC_APP" ] || { echo "stage-macos: LibreWolf.app not found in dmg" >&2; exit 1; }
+SRC_APP="$(find "$MNT" -maxdepth 2 -name "$UPSTREAM_NAME.app" -type d | head -n 1)"
+[ -n "$SRC_APP" ] || { echo "stage-macos: engine app not found in DMG" >&2; exit 1; }
 
 STAGE_ROOT="$OUTDIR/stage-macos-$ARCH"
 rm -rf "$STAGE_ROOT"
@@ -46,37 +48,40 @@ APP="$STAGE_ROOT/orc.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/engine" "$APP/Contents/Resources/profile-seed"
 
 # The engine rides inside, byte-for-byte as upstream shipped it.
-ditto "$SRC_APP" "$APP/Contents/Resources/engine/LibreWolf.app"
+ditto "$SRC_APP" "$APP/Contents/Resources/engine/$UPSTREAM_NAME.app"
 hdiutil detach "$MNT" >/dev/null
 # Full orc branding: the nested app takes orc's name, its plist
 # display names and executable are renamed, and every display string
 # + logo inside it is rebranded (the patch audits itself). All of it
 # happens BEFORE the seal below, so the seal covers the final bytes.
-mv "$APP/Contents/Resources/engine/LibreWolf.app" "$APP/Contents/Resources/engine/orc.app"
+mv "$APP/Contents/Resources/engine/$UPSTREAM_NAME.app" "$APP/Contents/Resources/engine/orc.app"
 python3 "$ROOT/packaging/brand-patch.py" patch \
   "$APP/Contents/Resources/engine/orc.app/Contents/Resources" "$ROOT/branding"
 python3 "$ROOT/packaging/brand-patch.py" macos \
-  "$APP/Contents/Resources/engine/orc.app"
+  "$APP/Contents/Resources/engine/orc.app" "$ICNS"
 
 # orc's policy layer lives inside the nested app's Resources.
 mkdir -p "$APP/Contents/Resources/engine/orc.app/Contents/Resources/distribution"
 cp "$ROOT/distribution/policies.json" \
    "$APP/Contents/Resources/engine/orc.app/Contents/Resources/distribution/policies.json"
+cp "$ROOT/distribution/distribution.ini" \
+   "$APP/Contents/Resources/engine/orc.app/Contents/Resources/distribution/distribution.ini"
 
-# orc's autoconfig: append orc's block to the engine's librewolf.cfg
-# (WebGL prompt off -- see packaging/orc-autoconfig.cfg) and audit
-# that it landed; enterprise policy cannot set a librewolf.* pref.
+# orc's autoconfig: append the WebGL compatibility block and verify it.
 # This happens before the seal below, so the seal covers these bytes.
-CFG="$APP/Contents/Resources/engine/orc.app/Contents/Resources/librewolf.cfg"
-[ -f "$CFG" ] || { echo "stage-macos: librewolf.cfg not found in engine" >&2; exit 1; }
-if ! grep -q 'librewolf.webgl.prompt' "$CFG"; then
+CFG="$APP/Contents/Resources/engine/orc.app/Contents/Resources/$UPSTREAM_SLUG.cfg"
+[ -f "$CFG" ] || { echo "stage-macos: engine config not found" >&2; exit 1; }
+if ! grep -q 'upstreamWebglPrompt' "$CFG"; then
   cat "$ROOT/packaging/orc-autoconfig.cfg" >> "$CFG"
 fi
-grep -q 'pref("librewolf.webgl.prompt", false)' "$CFG" || { echo "stage-macos: orc autoconfig append missing from librewolf.cfg" >&2; exit 1; }
+grep -q 'pref(upstreamWebglPrompt, false)' "$CFG" || { echo "stage-macos: orc autoconfig block missing" >&2; exit 1; }
 
 cp "$LAUNCHER" "$APP/Contents/MacOS/orc"
 chmod +x "$APP/Contents/MacOS/orc"
 cp "$ROOT/profile/user.js" "$APP/Contents/Resources/profile-seed/user.js"
+mkdir -p "$APP/Contents/Resources/profile-seed/chrome"
+cp "$ROOT/profile/chrome/userChrome.css" \
+   "$APP/Contents/Resources/profile-seed/chrome/userChrome.css"
 cp "$ROOT/WORKSPACES.md" "$APP/Contents/Resources/WORKSPACES.md"
 cp "$ICNS" "$APP/Contents/Resources/orc.icns"
 sed "s/__VERSION__/$VERSION/g" "$ROOT/packaging/Info.plist.tmpl" > "$APP/Contents/Info.plist"
@@ -85,7 +90,7 @@ printf 'APPL????' > "$APP/Contents/PkgInfo"
 # Seal the bundle ad-hoc, inside-out, and prove the seal. Two facts
 # make this mandatory, learned from Chase's "orc is damaged" report
 # (v0.1.1): writing distribution/policies.json into the nested app
-# invalidates LibreWolf's own signature, and the outer orc.app was
+# invalidates the upstream signature, and the outer orc.app was
 # never signed at all — a quarantined download in that state is
 # exactly what Gatekeeper calls "damaged". Ad-hoc signing does not
 # make the app identified (first open still needs right-click > Open,

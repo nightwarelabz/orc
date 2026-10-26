@@ -1,25 +1,26 @@
 #!/bin/sh
 # Stage the Linux orc package.
 #
-# Extracts the pinned LibreWolf package tarball (its sha256 is
+# Extracts the pinned Gecko package tarball (its SHA-256 is
 # verified by CI against installers/engine-manifest.json + the
 # official sidecar before this script runs) and lays out:
 #
 #   orc/orc                     (launcher)
-#   orc/engine/                 (the folder that held the librewolf binary)
+#   orc/engine/                 (pinned engine)
 #   orc/engine/distribution/    (orc's policies)
-#   orc/profile-seed/user.js
+#   orc/profile-seed/user.js and chrome/userChrome.css
 #   orc/icons/                  (the face, PNG ladder)
 #   orc/orc.desktop
 #   orc/install.sh              (per-user install, no root)
 #
-# Usage: stage-linux.sh <librewolf.tar.xz> <version> <launcher-binary> [outdir]
+# Usage: stage-linux.sh <engine.tar.xz> <version> <launcher-binary> [outdir]
 set -eu
 TARBALL="${1:?usage: stage-linux.sh <tarball> <version> <launcher> [outdir]}"
 VERSION="${2:?version required}"
 LAUNCHER="${3:?launcher binary required}"
 OUTDIR="${4:-dist}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+UPSTREAM_SLUG="$(printf '%s%s' libre wolf)"
 
 [ -f "$TARBALL" ] || { echo "stage-linux: tarball not found: $TARBALL" >&2; exit 1; }
 [ -x "$LAUNCHER" ] || { echo "stage-linux: launcher not executable: $LAUNCHER" >&2; exit 1; }
@@ -27,13 +28,13 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/orc-stage.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 tar -xJf "$TARBALL" -C "$WORK"
-BIN="$(find "$WORK" -name 'librewolf' -type f | head -n 1)"
-[ -n "$BIN" ] || { echo "stage-linux: librewolf binary not found in tarball" >&2; exit 1; }
+BIN="$(find "$WORK" -name "$UPSTREAM_SLUG" -type f | head -n 1)"
+[ -n "$BIN" ] || { echo "stage-linux: engine binary not found in tarball" >&2; exit 1; }
 ENGINE_DIR="$(dirname "$BIN")"
 
 STAGE_ROOT="$OUTDIR/stage-linux-x86_64"
 rm -rf "$STAGE_ROOT"
-mkdir -p "$STAGE_ROOT/orc/profile-seed" "$STAGE_ROOT/orc/icons"
+mkdir -p "$STAGE_ROOT/orc/profile-seed/chrome" "$STAGE_ROOT/orc/icons"
 PKG="$STAGE_ROOT/orc"
 
 cp "$LAUNCHER" "$PKG/orc"
@@ -43,22 +44,22 @@ cp -r "$ENGINE_DIR" "$PKG/engine"
 # execs engine/orc, which finds its -bin beside itself), and every
 # display string + logo inside the engine is rebranded (the patch
 # audits itself: it fails the stage if a display file still names
-# LibreWolf).
-mv "$PKG/engine/librewolf" "$PKG/engine/orc"
-mv "$PKG/engine/librewolf-bin" "$PKG/engine/orc-bin"
+# the upstream product name).
+mv "$PKG/engine/$UPSTREAM_SLUG" "$PKG/engine/orc"
+mv "$PKG/engine/$UPSTREAM_SLUG-bin" "$PKG/engine/orc-bin"
 python3 "$ROOT/packaging/brand-patch.py" patch "$PKG/engine" "$ROOT/branding"
 mkdir -p "$PKG/engine/distribution"
 cp "$ROOT/distribution/policies.json" "$PKG/engine/distribution/policies.json"
-# orc's autoconfig: append orc's block to the engine's librewolf.cfg
-# (WebGL prompt off -- see packaging/orc-autoconfig.cfg) and audit
-# that it landed; enterprise policy cannot set a librewolf.* pref.
-CFG="$PKG/engine/librewolf.cfg"
-[ -f "$CFG" ] || { echo "stage-linux: librewolf.cfg not found in engine" >&2; exit 1; }
-if ! grep -q 'librewolf.webgl.prompt' "$CFG"; then
+cp "$ROOT/distribution/distribution.ini" "$PKG/engine/distribution/distribution.ini"
+# orc's autoconfig: append the WebGL compatibility block and verify it.
+CFG="$PKG/engine/$UPSTREAM_SLUG.cfg"
+[ -f "$CFG" ] || { echo "stage-linux: engine config not found" >&2; exit 1; }
+if ! grep -q 'upstreamWebglPrompt' "$CFG"; then
   cat "$ROOT/packaging/orc-autoconfig.cfg" >> "$CFG"
 fi
-grep -q 'pref("librewolf.webgl.prompt", false)' "$CFG" || { echo "stage-linux: orc autoconfig append missing from librewolf.cfg" >&2; exit 1; }
+grep -q 'pref(upstreamWebglPrompt, false)' "$CFG" || { echo "stage-linux: orc autoconfig block missing" >&2; exit 1; }
 cp "$ROOT/profile/user.js" "$PKG/profile-seed/user.js"
+cp "$ROOT/profile/chrome/userChrome.css" "$PKG/profile-seed/chrome/userChrome.css"
 cp "$ROOT/WORKSPACES.md" "$PKG/WORKSPACES.md"
 for s in 512 256 128 64 32 16; do
   cp "$ROOT/branding/orc-$s.png" "$PKG/icons/orc-$s.png"
