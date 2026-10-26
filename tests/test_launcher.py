@@ -27,7 +27,9 @@ def compile_c(source, target, definitions=()):
         args = [os.environ.get("CC", "cc"), "-std=c11", "-Wall", "-Wextra",
                 "-Werror", "-O2", *["-D" + d for d in definitions],
                 str(source), "-o", str(target)]
-    subprocess.run(args, cwd=target.parent, check=True, capture_output=True, text=True)
+    result = subprocess.run(args, cwd=target.parent, capture_output=True, text=True)
+    if result.returncode:
+        raise RuntimeError(f"compiler failed:\n{result.stdout}\n{result.stderr}")
 
 
 class LauncherTests(unittest.TestCase):
@@ -163,8 +165,11 @@ class LauncherTests(unittest.TestCase):
         self.assertFalse(self.capture.exists())
 
     def test_depth_and_segment_bounds(self):
-        name = "/".join(["x" * 48] * 16)
+        # The longest name at every level can exceed macOS PATH_MAX once
+        # the home directory is included. Check the independent limits.
+        name = "/".join(["x"] * 16)
         self.assertEqual(self.info("--orc-workspace", name)["depth"], 16)
+        self.assertEqual(self.info("--orc-workspace", "x" * 48)["depth"], 1)
         self.run_orc("--orc-workspace", name, "--orc-child", "overflow", success=False)
         self.run_orc("--orc-child", "two/levels", success=False)
         self.assertEqual(self.info("--orc-child", "a-1_b")["workspace"], "a-1_b")
@@ -201,6 +206,59 @@ class LauncherTests(unittest.TestCase):
         (self.data / "profile").write_text("not a directory", encoding="utf-8")
         self.run_orc(success=False)
         self.assertFalse(self.capture.exists())
+
+    def test_concurrent_first_runs_observe_a_complete_seed(self):
+        seed = b"// large first-run settings file\n" * 32768
+        self.seed.write_bytes(seed)
+        processes = []
+        paths = []
+        for i in range(12):
+            capture = self.root / f"concurrent-{i}.json"
+            env = dict(self.env, ORC_TEST_CAPTURE=str(capture))
+            processes.append(subprocess.Popen([str(self.launcher), "--orc-workspace", "shared"],
+                                             env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE))
+            paths.append(capture)
+        for process in processes:
+            stdout, stderr = process.communicate(timeout=15)
+            self.assertEqual(process.returncode, 0, (stdout, stderr))
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            try:
+                reports = [json.loads(path.read_text(encoding="utf-8")) for path in paths]
+                break
+            except (FileNotFoundError, json.JSONDecodeError):
+                time.sleep(0.02)
+        else:
+            self.fail("concurrent engines did not report")
+        self.assertEqual([r["seed_bytes"] for r in reports], [len(seed)] * len(paths))
+        self.assertEqual((self.data / "workspaces/shared/profile/user.js").read_bytes(), seed)
+        self.assertEqual(list(self.data.rglob("*.orc-*")), [])
+
+    def test_failed_seed_can_be_retried_without_partial_settings(self):
+        self.seed.unlink()
+        self.seed.mkdir()
+        self.run_orc(success=False)
+        self.assertFalse((self.data / "profile/user.js").exists())
+        self.seed.rmdir()
+        self.seed.write_bytes(b"// recovered installation\n")
+        self.assertEqual(self.launch()["seed_bytes"], self.seed.stat().st_size)
+
+    def test_existing_profile_needs_no_seed_after_first_run(self):
+        self.launch()
+        self.seed.unlink()
+        self.launch()
+
+    def test_existing_settings_directory_is_rejected(self):
+        (self.data / "profile/user.js").mkdir(parents=True)
+        self.run_orc(success=False)
+        self.assertFalse(self.capture.exists())
+
+    def test_quotes_and_backslashes_survive_engine_forwarding(self):
+        args = []
+        for count in range(9):
+            args += ["\\" * count, "before" + "\\" * count + '"after',
+                     "spaces then " + "\\" * count]
+        self.assertEqual(self.launch(*args)["argv"][3:], args)
 
     @unittest.skipIf(WINDOWS or MACOS, "XDG is Linux-specific")
     def test_xdg_home_is_respected_and_relative_values_are_ignored(self):

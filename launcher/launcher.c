@@ -152,16 +152,37 @@ static int regular_file(const OrcChar *path) {
 #endif
 }
 
-/* Copy with exclusive creation. A second launcher or a user's existing
- * user.js wins; neither is truncated. Missing/failed seeds stop startup. */
+/* Publish a complete seed atomically without replacing an existing file.
+ * Concurrent launchers must never start Gecko with a half-written user.js.
+ * Missing/failed seeds stop startup; the user's entry always wins. */
 static int seed_profile(const OrcChar *seed, const OrcChar *target) {
 #ifdef _WIN32
     DWORD attr = GetFileAttributesW(target);
     if (attr != INVALID_FILE_ATTRIBUTES)
         return attr & FILE_ATTRIBUTE_DIRECTORY ? -1 : 0;
-    if (CopyFileW(seed, target, TRUE)) return 0;
-    DWORD error = GetLastError();
-    return (error == ERROR_FILE_EXISTS || error == ERROR_ALREADY_EXISTS) && regular_file(target) ? 0 : -1;
+    OrcChar staging[ORC_PATH_CAP];
+    int copied = 0;
+    /* CopyFileW with fail-if-exists avoids clobbering another launcher's
+     * staging file and has no GetTempFileNameW MAX_PATH restriction. */
+    for (unsigned attempt = 0; attempt < 100; attempt++) {
+        int n = _snwprintf(staging, ORC_PATH_CAP, L"%ls.orc-%lu-%u", target,
+                           GetCurrentProcessId(), attempt);
+        if (n < 0 || n >= ORC_PATH_CAP) return -1;
+        if (CopyFileW(seed, staging, TRUE)) { copied = 1; break; }
+        DWORD error = GetLastError();
+        if (error != ERROR_FILE_EXISTS && error != ERROR_ALREADY_EXISTS) {
+            DeleteFileW(staging);
+            return -1;
+        }
+    }
+    if (!copied) return -1;
+    int failed = 0;
+    if (!MoveFileExW(staging, target, 0)) {
+        DWORD error = GetLastError();
+        failed = !((error == ERROR_FILE_EXISTS || error == ERROR_ALREADY_EXISTS) && regular_file(target));
+    }
+    DeleteFileW(staging);
+    return failed ? -1 : 0;
 #else
     struct stat st;
     /* lstat also protects dangling symlinks: never replace a user's entry. */
@@ -169,11 +190,16 @@ static int seed_profile(const OrcChar *seed, const OrcChar *target) {
     if (errno != ENOENT) return -1;
     int input = open(seed, O_RDONLY);
     if (input < 0) return -1;
-    int output = open(target, O_WRONLY | O_CREAT | O_EXCL, 0600);
+    OrcChar staging[ORC_PATH_CAP];
+    size_t len = strlen(target);
+    const char suffix[] = ".orc-XXXXXX";
+    if (len + sizeof(suffix) > sizeof(staging)) { close(input); return -1; }
+    memcpy(staging, target, len);
+    memcpy(staging + len, suffix, sizeof(suffix));
+    int output = mkstemp(staging);
     if (output < 0) {
-        int exists = errno == EEXIST;
         close(input);
-        return exists && regular_file(target) ? 0 : -1;
+        return -1;
     }
     char buffer[8192];
     ssize_t size;
@@ -195,7 +221,11 @@ static int seed_profile(const OrcChar *seed, const OrcChar *target) {
     }
     if (close(input)) failed = 1;
     if (close(output)) failed = 1;
-    if (failed) unlink(target);
+    /* link is an atomic no-replace publication on the same filesystem.
+     * Another successful launcher may have published first. */
+    if (!failed && link(staging, target))
+        failed = !(errno == EEXIST && regular_file(target));
+    unlink(staging);
     return failed ? -1 : 0;
 #endif
 }

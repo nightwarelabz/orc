@@ -53,6 +53,26 @@ int probe_main(int argc, ProbeChar **argv) {
     fprintf(out, ",\"depth\":");
     const ProbeChar *depth = probe_env(P("ORC_WORKSPACE_DEPTH"));
     string(out, depth ? depth : P(""));
+    /* Observe the seed immediately after exec: racing first launches must
+     * all see a complete file, rather than merely leave one behind. */
+    unsigned long long seed_bytes = 0;
+    if (argc >= 3) {
+        ProbeChar path[32768];
+#ifdef _WIN32
+        int n = _snwprintf(path, 32768, L"%ls\\user.js", argv[2]);
+        FILE *seed = n > 0 && n < 32768 ? _wfopen(path, L"rb") : NULL;
+#else
+        int n = snprintf(path, sizeof(path), "%s/user.js", argv[2]);
+        FILE *seed = n > 0 && (size_t)n < sizeof(path) ? fopen(path, "rb") : NULL;
+#endif
+        if (seed) {
+            char buffer[8192];
+            size_t size;
+            while ((size = fread(buffer, 1, sizeof(buffer), seed)) > 0) seed_bytes += size;
+            fclose(seed);
+        }
+    }
+    fprintf(out, ",\"seed_bytes\":%llu", seed_bytes);
     fprintf(out, "}\n");
     return fclose(out) ? 6 : 0;
 }
